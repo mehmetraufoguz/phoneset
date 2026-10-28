@@ -18,6 +18,12 @@ jobs:
         with:
           go-version-file: pc/go.mod
       - run: go vet ./...
+      - name: Check that the Windows installer parses
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/../scripts/install-windows.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }
       - run: go build -trimpath -ldflags "-s -w" -o phoneset.exe ./cmd/phoneset
         env:
           CGO_ENABLED: "0"
@@ -60,5 +66,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: sh -n scripts/install-mac.sh
       - run: pnpm check
       - run: pnpm typecheck
