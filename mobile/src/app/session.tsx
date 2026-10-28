@@ -1,44 +1,44 @@
 import { Button, FieldGroup, Host, Row, Slider, Spacer, Switch, Text } from "@expo/ui"
 import { useKeepAwake } from "expo-keep-awake"
-import { useNavigation, useRouter } from "expo-router"
-import { useEffect, useState } from "react"
+import { useRouter } from "expo-router"
+import { useState } from "react"
 import { Session, type SessionState, type StreamStatus } from "../core/session"
 import { act, BRAND, useColors, useSessionState } from "../ui/hooks"
 
 export default function SessionScreen() {
   const router = useRouter()
-  const navigation = useNavigation()
   const state = useSessionState()
   const colors = useColors()
 
-  // The phone is a live microphone here: keep it awake and stop streaming when we leave.
+  // The phone is a live microphone here: keep it awake while this screen is open.
   useKeepAwake()
-  useEffect(
-    () => navigation.addListener("blur", () => act(Session.use((s) => s.stop))),
-    [navigation]
-  )
 
-  const leave = () => router.back()
+  // Going back (header button or swipe) keeps the connection: it shows on the home screen and
+  // in the notification. Only these buttons end it.
+  const disconnect = () => {
+    act(Session.use((s) => s.stop))
+    router.back()
+  }
 
   return (
     <Host style={{ flex: 1 }} seedColor={BRAND}>
       <FieldGroup>
         {state._tag === "Connected" ? (
-          <Connected state={state} onLeave={leave} />
+          <Connected state={state} onDisconnect={disconnect} />
         ) : state._tag === "Failed" ? (
           <FieldGroup.Section title="Couldn't connect">
             <Text textStyle={{ color: colors.danger }}>{state.message}</Text>
             {state.code === "unknown_device" || state.code === "bad_server" ? null : (
               <Button label="Try again" onPress={() => act(Session.use((s) => s.retry))} />
             )}
-            <Button variant="outlined" label="Back" onPress={leave} />
+            <Button variant="outlined" label="Back" onPress={disconnect} />
           </FieldGroup.Section>
         ) : (
           <FieldGroup.Section title={state._tag === "Connecting" ? state.pcName : "phoneset"}>
             <Text textStyle={{ color: colors.secondary }}>
               {state._tag === "Connecting" ? `${state.step}…` : "Not connected"}
             </Text>
-            <Button variant="outlined" label="Cancel" onPress={leave} />
+            <Button variant="outlined" label="Cancel" onPress={disconnect} />
           </FieldGroup.Section>
         )}
       </FieldGroup>
@@ -48,10 +48,10 @@ export default function SessionScreen() {
 
 function Connected({
   state,
-  onLeave
+  onDisconnect
 }: {
   state: Extract<SessionState, { _tag: "Connected" }>
-  onLeave: () => void
+  onDisconnect: () => void
 }) {
   const colors = useColors()
   const [echoCancellation, setEchoCancellation] = useState(false)
@@ -135,7 +135,7 @@ function Connected({
       </FieldGroup.Section>
 
       <FieldGroup.Section>
-        <Button variant="outlined" label="Disconnect" onPress={onLeave} />
+        <Button variant="outlined" label="Disconnect" onPress={onDisconnect} />
       </FieldGroup.Section>
     </>
   )
