@@ -4,9 +4,10 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-mac.sh | sh
 #
-# While the repository is private that URL answers 404; the same script runs through the GitHub CLI:
+# A private fork answers 404 to that URL; once `gh auth login` is done the same script runs through the
+# GitHub CLI (and with the CLI signed in, the release download goes through it too):
 #
-#   gh api repos/mehmetraufoguz/phoneset/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh
+#   gh api repos/<owner>/<repo>/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh
 #
 # Options go after `sh -s --`, e.g. `... | sh -s -- --start --autostart`:
 #   --start            start phoneset in the background now
@@ -69,7 +70,7 @@ else
 		URL="https://github.com/$REPO/releases/latest/download/$ASSET"
 	fi
 	curl -fsSL "$URL" -o "$TMP/$ASSET" ||
-		die "couldn't download $URL. The repository is private: install the GitHub CLI (brew install gh), run 'gh auth login' and try again."
+		die "couldn't download $URL. Check that the release exists. For a private fork, install the GitHub CLI (brew install gh), run 'gh auth login' and try again."
 fi
 
 # 2. If it is running, stop it so the file can be replaced, and bring it back afterwards.

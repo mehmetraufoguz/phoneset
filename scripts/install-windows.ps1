@@ -66,9 +66,9 @@ function Install-Phoneset {
                 Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
             }
             catch {
-                # A private repository answers 404 to anonymous downloads; the GitHub CLI can sign in.
+                # A private fork answers 404 to anonymous downloads; the GitHub CLI can sign in.
                 $gh = Get-Command gh -ErrorAction SilentlyContinue
-                if (-not $gh) { throw "Couldn't download $url ($($_.Exception.Message)). If the repository is private, install the GitHub CLI (winget install GitHub.cli), run 'gh auth login' and try again." }
+                if (-not $gh) { throw "Couldn't download $url ($($_.Exception.Message)). If this is a private fork, install the GitHub CLI (winget install GitHub.cli), run 'gh auth login' and try again." }
                 $ghArgs = @("release", "download")
                 if ($Version) { $ghArgs += $Version }
                 $ghArgs += @("--repo", $repo, "--pattern", $asset, "--dir", $tmp)
