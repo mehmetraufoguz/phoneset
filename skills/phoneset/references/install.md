@@ -61,10 +61,10 @@ Environment: `PHONESET_BIN_DIR` (install folder), `PHONESET_TARBALL` (install fr
 **The virtual microphone:** `brew install blackhole-2ch` (or https://existential.audio/blackhole/). Apps pick
 **BlackHole 2ch** as their microphone.
 
-While the repository is private both URLs answer 404. Use the GitHub CLI instead (`gh auth login` first):
+A private fork answers 404 to both URLs. Use the GitHub CLI instead (`gh auth login` first):
 
 ```sh
-gh api repos/mehmetraufoguz/phoneset/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh
+gh api repos/<owner>/<repo>/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh
 ```
 
 ### From source

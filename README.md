@@ -278,6 +278,8 @@ between the real phone-side code and the real Go server; on macOS the CoreAudio 
 devices, an output device fed for seconds without an underrun, a full session against the
 phone-side code); the daemon on macOS (starts detached, `status`/`pair`/`stop`, the control API's
 token and Host checks, the LaunchAgent enable/disable cycle) and the installer.
+The first release (v0.1.0) was built by CI and read back from GitHub: the checksums match, and `phoneset update`
+(check, download, checksum, replace) and the macOS installer ran against it on an Apple silicon Mac.
 
 Not yet exercised:
 
@@ -290,10 +292,9 @@ Not yet exercised:
 - the Live Activity (needs the App Group above, so it has not been built), the Android notification
   and build, and background operation;
 - iPhone echo cancellation (the change builds, but nobody has listened to it yet);
-- `phoneset update` against a real release (it passed against a stand-in for the GitHub API: version
-  and commit stamping, the commit comparison, the checksum, restarting a background service with its flags;
-  the Windows replace-the-running-exe step and the tray item have not been run), and the Windows installer
-  script (it parses in CI, but has not been run on a Windows machine).
+- the Windows side of `phoneset update` (replacing the running exe) and the tray's update item, the Windows
+  installer script (it parses in CI, but has not been run on a Windows machine), and the Windows ARM and Intel
+  Mac builds beyond what CI compiles.
 
 Expect to tune the jitter buffer (`audio.NewPlayout`, 60 ms target) on your Wi-Fi.
 
