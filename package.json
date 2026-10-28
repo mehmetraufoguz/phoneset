@@ -2,6 +2,7 @@
   "name": "phoneset",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Use your phone as your PC's microphone and headphones over Wi-Fi.",
   "packageManager": "pnpm@11.10.0",
   "scripts": {

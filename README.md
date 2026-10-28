@@ -298,3 +298,8 @@ Not yet exercised:
 Expect to tune the jitter buffer (`audio.NewPlayout`, 60 ms target) on your Wi-Fi.
 
 Ideas for later: Opus instead of raw PCM, UDP transport for lossy networks, Linux.
+
+## License
+
+[MIT](LICENSE). The virtual audio devices phoneset uses (VB-CABLE, BlackHole) and the libraries it builds on have
+their own licenses.

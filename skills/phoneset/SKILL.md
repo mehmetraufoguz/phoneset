@@ -1,6 +1,7 @@
 ---
 name: phoneset
 description: Install, set up, run and troubleshoot phoneset, which turns a phone (iPhone or Android) into a Windows or Mac's microphone and headphones over Wi-Fi. Use when the user wants a phone to work as a PC microphone or as headphones, wants to install, update or pair phoneset, needs to pick audio devices (VB-CABLE, BlackHole), wants it running in the background, in the tray or at login, or is debugging audio, echo, pairing or connection problems with it.
+license: MIT
 ---
 
 # phoneset
