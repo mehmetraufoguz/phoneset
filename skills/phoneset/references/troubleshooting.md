@@ -68,7 +68,7 @@ Echo means the phone's microphone hears the phone's own speaker: PC audio plays 
   microphone away from the speaker helps too.
 - **iPhone:** in the session screen, **Sound → Echo cancellation**. It switches the phone's audio to its
   voice-call mode (voice processing on the audio engine's input), so the PC's audio can sound different while
-  it is on. Turning it on or off restarts a running microphone for a moment. This is new and has not been
+  it is on. Turning it on or off stops the running microphone and headphones for a moment and starts them again. This is new and has not been
   confirmed on a device yet: if it doesn't remove the echo, say so rather than pretending, and fall back to
   earphones.
 - **Android:** not available yet.
