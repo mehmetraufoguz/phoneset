@@ -64,7 +64,7 @@ func (se *session) run(ctx context.Context) (reason string) {
 			if ctx.Err() != nil {
 				return "closed"
 			}
-			return "connection lost"
+			return fmt.Sprintf("connection lost (%v)", err)
 		}
 		switch typ {
 		case proto.FrameMic:
@@ -294,6 +294,9 @@ func (se *session) sendSpeaker(ctx context.Context) {
 			binary.BigEndian.PutUint32(hdr[:], seq)
 			seq++
 			if err := se.ch.Send(ctx, proto.FrameSpeaker, hdr[:], frame); err != nil {
+				if ctx.Err() == nil {
+					se.srv.log.Warn("couldn't send audio to the phone", "err", err)
+				}
 				se.cancel()
 				return
 			}

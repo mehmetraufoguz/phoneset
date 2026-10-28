@@ -33,6 +33,11 @@ export class PairLinkError extends Schema.TaggedError<PairLinkError>()("PairLink
   message: Schema.String
 }) {}
 
+/** A bug on our side: something threw where nothing was expected to. */
+export class InternalError extends Schema.TaggedError<InternalError>()("InternalError", {
+  message: Schema.String
+}) {}
+
 export type ConnectError =
   | TransportError
   | ProtocolError
@@ -40,5 +45,6 @@ export type ConnectError =
   | StorageError
   | DiscoveryError
   | AudioError
+  | InternalError
 
 export const messageOf = (error: { readonly message: string }): string => error.message

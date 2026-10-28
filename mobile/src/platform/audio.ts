@@ -190,33 +190,38 @@ const openPlayer = Effect.gen(function* () {
   }
 
   const write = (pcm: Uint8Array) =>
-    Effect.sync(() => {
-      // After silence or an underrun the queue is empty: rebuild the cushion first.
-      if (queue.length === 0) {
-        enqueue(new Float32Array((SAMPLE_RATE * CUSHION_MS) / 1000), null)
-      }
-      const [left, right] = deinterleaveStereo(pcm)
-      enqueue(left, right)
+    Effect.try({
+      try: () => {
+        // After silence or an underrun the queue is empty: rebuild the cushion first.
+        if (queue.length === 0) {
+          enqueue(new Float32Array((SAMPLE_RATE * CUSHION_MS) / 1000), null)
+        }
+        const [left, right] = deinterleaveStereo(pcm)
+        enqueue(left, right)
 
-      // Clock drift or a burst after a stall: drop the oldest queued audio, not the playing buffer.
-      while ((queued * 1000) / SAMPLE_RATE > MAX_QUEUED_MS && queue.length > 2) {
-        const victim = queue[1]
-        if (victim === undefined) break
-        node.dequeueBuffer(victim.id)
-        queued -= victim.samples
-        queue.splice(1, 1)
-        drops++
-      }
-      if (!started) {
-        started = true
-        node.start()
-      }
+        // Clock drift or a burst after a stall: drop the oldest queued audio, not the playing buffer.
+        while ((queued * 1000) / SAMPLE_RATE > MAX_QUEUED_MS && queue.length > 2) {
+          const victim = queue[1]
+          if (victim === undefined) break
+          node.dequeueBuffer(victim.id)
+          queued -= victim.samples
+          queue.splice(1, 1)
+          drops++
+        }
+        if (!started) {
+          started = true
+          // Pass the offset explicitly: the library's default (-1) trips its own range check,
+          // so a bare start() always throws a RangeError.
+          node.start(0, 0)
+        }
 
-      // A fuller queue plays slightly faster, an emptier one slightly slower.
-      if (++writes % 5 === 0) {
-        const error = ((queued * 1000) / SAMPLE_RATE - CUSHION_MS) / CUSHION_MS
-        node.playbackRate.value = 1 + Math.max(-1, Math.min(1, error)) * MAX_RATE_ADJUST
-      }
+        // A fuller queue plays slightly faster, an emptier one slightly slower.
+        if (++writes % 5 === 0) {
+          const error = ((queued * 1000) / SAMPLE_RATE - CUSHION_MS) / CUSHION_MS
+          node.playbackRate.value = 1 + Math.max(-1, Math.min(1, error)) * MAX_RATE_ADJUST
+        }
+      },
+      catch: audioError("Couldn't play the PC's audio.")
     })
 
   const player: Player = {

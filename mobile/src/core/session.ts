@@ -20,6 +20,7 @@ import {
   type AudioError,
   AuthError,
   type ConnectError,
+  InternalError,
   ProtocolError,
   TransportError
 } from "./errors"
@@ -342,17 +343,31 @@ function makeSession() {
 
         const applyStream = (m: Extract<ServerMessage, { t: "stream" }>) =>
           Effect.gen(function* () {
+            // Turning a stream off must not wipe the reason it was turned off (a player that
+            // failed, a device that vanished); only starting it again clears the error.
             if (m.mic !== undefined || m.micError !== undefined) {
-              yield* setMicStatus({ on: m.mic ?? false, busy: false, error: m.micError ?? null })
+              yield* whenConnected((s) => ({
+                ...s,
+                mic: {
+                  ...s.mic,
+                  on: m.mic ?? false,
+                  busy: false,
+                  error: m.micError ?? (m.mic ? null : s.mic.error)
+                }
+              }))
               if (m.mic === true) yield* FiberHandle.run(micFiber, micPump, { onlyIfMissing: true })
               else if (m.mic === false) yield* FiberHandle.clear(micFiber)
             }
             if (m.speaker !== undefined || m.speakerError !== undefined) {
-              yield* setSpeakerStatus({
-                on: m.speaker ?? false,
-                busy: false,
-                error: m.speakerError ?? null
-              })
+              yield* whenConnected((s) => ({
+                ...s,
+                speaker: {
+                  ...s.speaker,
+                  on: m.speaker ?? false,
+                  busy: false,
+                  error: m.speakerError ?? (m.speaker ? null : s.speaker.error)
+                }
+              }))
               if (m.speaker === true)
                 yield* FiberHandle.run(playerFiber, playback, { onlyIfMissing: true })
               else if (m.speaker === false) yield* FiberHandle.clear(playerFiber)
@@ -424,11 +439,20 @@ function makeSession() {
               if (message.type === Frame.speaker && message.body.length > AUDIO_HEADER_LEN) {
                 const pcm = message.body.subarray(AUDIO_HEADER_LEN)
                 return Ref.get(player).pipe(
-                  Effect.flatMap((p) => (p === null ? Effect.void : p.write(pcm)))
+                  Effect.flatMap((p) => (p === null ? Effect.void : p.write(pcm))),
+                  // A player that can't go on turns the headphones off. It never takes the
+                  // connection down with it.
+                  Effect.catch((e) =>
+                    audioFailure("speaker")(e).pipe(Effect.andThen(FiberHandle.clear(playerFiber)))
+                  )
                 )
               }
               return Effect.void
-            })
+            }),
+            // One bad message is not worth the connection.
+            Effect.catchDefect((defect) =>
+              Effect.logWarning("Ignored a message that threw", defect)
+            )
           )
         )
       })
@@ -475,6 +499,15 @@ function makeSession() {
       attempt: number
     ): Effect.Effect<void> =>
       connectOnce(targetRef, connectedOnce).pipe(
+        // Whatever we did not foresee must end on the error screen, never as a connection
+        // that died while the screen kept saying "connected".
+        Effect.catchDefect((defect) =>
+          Effect.fail(
+            new InternalError({
+              message: `Something went wrong: ${defect instanceof Error ? defect.message : String(defect)}`
+            })
+          )
+        ),
         Effect.catch((error: ConnectError) =>
           Effect.gen(function* () {
             const target = yield* Ref.get(targetRef)

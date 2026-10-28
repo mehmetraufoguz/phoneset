@@ -9,7 +9,7 @@ export interface PlayerStats {
 
 /** Plays 48 kHz stereo s16le received from the PC. */
 export interface Player {
-  readonly write: (pcm: Uint8Array) => Effect.Effect<void>
+  readonly write: (pcm: Uint8Array) => Effect.Effect<void, AudioError>
   readonly stats: Effect.Effect<PlayerStats>
 }
 
