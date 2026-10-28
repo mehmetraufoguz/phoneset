@@ -25,7 +25,7 @@ jobs:
           go-version-file: pc/go.mod
       - name: Build
         working-directory: pc
-        run: go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME#v}" -o phoneset ./cmd/phoneset
+        run: go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME#v} -X main.commit=${GITHUB_SHA}" -o phoneset ./cmd/phoneset
       - run: tar -czf phoneset-macos-${{ matrix.arch }}.tar.gz -C pc phoneset
       - uses: actions/upload-artifact@v4
         with:
@@ -48,7 +48,7 @@ jobs:
       - name: Build
         working-directory: pc
         shell: bash
-        run: go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME#v}" -o phoneset.exe ./cmd/phoneset
+        run: go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME#v} -X main.commit=${GITHUB_SHA}" -o phoneset.exe ./cmd/phoneset
       - run: Compress-Archive -Path pc/phoneset.exe -DestinationPath phoneset-windows-${{ matrix.arch }}.zip
       - uses: actions/upload-artifact@v4
         with:
@@ -63,6 +63,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum phoneset-* > SHA256SUMS
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
