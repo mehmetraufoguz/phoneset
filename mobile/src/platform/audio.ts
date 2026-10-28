@@ -1,11 +1,5 @@
 import { Effect, Layer, Queue, Stream } from "effect"
-import { Platform } from "react-native"
-import {
-  AudioContext,
-  AudioManager,
-  AudioRecorder,
-  RecordingNotificationManager
-} from "react-native-audio-api"
+import { AudioContext, AudioManager, AudioRecorder } from "react-native-audio-api"
 import { AudioIO, type AudioOptions, type Player } from "../core/audio"
 import { FRAME_SAMPLES, SAMPLE_RATE } from "../core/constants"
 import { AudioError } from "../core/errors"
@@ -63,28 +57,10 @@ const ensureMicPermission = Effect.tryPromise({
 
 // ---------------------------------------------------------------- microphone
 
-/** On Android a foreground-service notification keeps the mic alive in the background. */
-const keepAliveNotification = Effect.acquireRelease(
-  Platform.OS === "android"
-    ? Effect.promise(async () => {
-        await AudioManager.requestNotificationPermissions().catch(() => {})
-        await RecordingNotificationManager.show({
-          title: "phoneset",
-          contentText: "Your phone is the PC's microphone"
-        }).catch(() => {})
-      })
-    : Effect.void,
-  () =>
-    Platform.OS === "android"
-      ? Effect.promise(() => RecordingNotificationManager.hide().catch(() => {}))
-      : Effect.void
-)
-
 const mic = Stream.callback<Uint8Array, AudioError>(
   (queue) =>
     Effect.gen(function* () {
       yield* useSession
-      yield* keepAliveNotification
 
       const recorder = new AudioRecorder()
       const chunker = new Chunker(FRAME_SAMPLES * 2)

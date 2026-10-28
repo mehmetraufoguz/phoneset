@@ -13,7 +13,9 @@
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "phoneset connects to your PC over your Wi-Fi network.",
         "NSBonjourServices": ["_phoneset._tcp"],
-        "NSAppTransportSecurity": { "NSAllowsLocalNetworking": true }
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
       }
     },
     "android": {
@@ -60,10 +62,14 @@
       [
         "expo-build-properties",
         {
-          "android": { "usesCleartextTraffic": true }
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],
-    "experiments": { "typedRoutes": true }
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }
