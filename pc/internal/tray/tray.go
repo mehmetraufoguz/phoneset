@@ -8,12 +8,14 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"time"
 
 	"fyne.io/systray"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/app"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/icons"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/system"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/update"
 )
 
 func init() {
@@ -34,6 +36,7 @@ type Actions struct {
 	OpenLog     func()
 	Autostart   system.Autostart
 	Exe         string
+	Update      Updater
 }
 
 func icon(connected bool) []byte {
@@ -82,8 +85,16 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 		if on, err := act.Autostart.Enabled(); err == nil && on {
 			login.Check()
 		}
+		var checkItem *systray.MenuItem
+		if act.Update.Check != nil {
+			checkItem = systray.AddMenuItem("Check for updates", "Look for a newer phoneset")
+		}
 		logItem := systray.AddMenuItem("Open log", "")
 		systray.AddSeparator()
+		if act.Update.Version != "" {
+			ver := systray.AddMenuItem("phoneset "+act.Update.Version, "")
+			ver.Disable()
+		}
 		quit := systray.AddMenuItem("Quit phoneset", "")
 
 		update := func(s app.Snapshot) {
@@ -158,6 +169,10 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 			}(i)
 		}
 
+		if checkItem != nil {
+			go updateItem(ctx, a, checkItem, act.Update)
+		}
+
 		go func() {
 			errc <- work()
 			systray.Quit()
@@ -173,6 +188,57 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 		return err
 	default:
 		return nil
+	}
+}
+
+// updateItem drives the "Check for updates" entry: a click checks; once a newer build is found, the
+// next click installs it.
+func updateItem(ctx context.Context, a *app.App, item *systray.MenuItem, u Updater) {
+	var found *update.Release
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-item.ClickedCh:
+		}
+		item.Disable()
+		if found != nil {
+			item.SetTitle("Installing the update…")
+			ictx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			restarting, err := u.Install(ictx, found)
+			cancel()
+			switch {
+			case err != nil:
+				a.Log.Warn("update failed", "err", err)
+				item.SetTitle("Update failed, try again")
+				item.Enable()
+			case restarting:
+				item.SetTitle("Restarting…")
+			default:
+				item.SetTitle("Updated: restart phoneset to use it")
+				found = nil
+			}
+			continue
+		}
+		item.SetTitle("Checking for updates…")
+		cctx, cancel := context.WithTimeout(ctx, time.Minute)
+		res, err := u.Check(cctx)
+		cancel()
+		switch {
+		case err != nil:
+			a.Log.Warn("couldn't check for updates", "err", err)
+			item.SetTitle("Couldn't check, try again")
+		case res.Status == update.Available && u.Install != nil:
+			found = res.Latest
+			item.SetTitle("Install update " + res.Latest.Tag + " (" + res.Latest.Short() + ")")
+		case res.Status == update.UpToDate:
+			item.SetTitle("✓ Up to date")
+		case res.Status == update.Ahead:
+			item.SetTitle("✓ This build is newer than the release")
+		default:
+			item.SetTitle("Can't tell if there is an update")
+		}
+		item.Enable()
 	}
 }
 

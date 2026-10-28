@@ -8,6 +8,7 @@ import (
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/store"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/term"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/update"
 )
 
 var version = "dev"
@@ -24,6 +25,8 @@ Or in the background (tray icon on Windows and macOS):
   phoneset stop              stop the background service
   phoneset logs              where the log is, and its last lines
   phoneset autostart enable  start in the background at every login (or: disable, status)
+  phoneset update            install the newest release if this build's commit is behind it
+                             (--check only looks; --force reinstalls; --json for scripts)
 
 Other:
   phoneset audio             list audio devices and how phoneset would use them
@@ -49,6 +52,7 @@ Flags for serve and daemon:
 
 func main() {
 	term.Init()
+	update.CleanupOld() // the previous executable, left behind by a Windows update
 	cmd, args := "serve", os.Args[1:]
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
@@ -69,6 +73,10 @@ func main() {
 		err = cmdLogs(args)
 	case "autostart":
 		err = cmdAutostart(args)
+	case "update":
+		err = cmdUpdate(args)
+	case "relaunch": // internal: started by a service that has just updated itself
+		err = cmdRelaunch(args)
 	case "audio":
 		err = cmdAudio()
 	case "test":
@@ -78,7 +86,7 @@ func main() {
 	case "forget":
 		err = cmdForget(args)
 	case "version":
-		fmt.Println("phoneset", version)
+		fmt.Println("phoneset", buildLabel(version, currentBuild().Commit))
 	case "help":
 		fmt.Print(usage)
 	default:

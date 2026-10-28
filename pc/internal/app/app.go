@@ -37,6 +37,7 @@ type PhoneRow struct {
 // Snapshot is everything a UI needs to draw the current state.
 type Snapshot struct {
 	Version string            `json:"version"`
+	Commit  string            `json:"commit,omitempty"`
 	Name    string            `json:"name"`
 	PID     int               `json:"pid"`
 	Port    int               `json:"port"`
@@ -51,6 +52,7 @@ type Snapshot struct {
 
 type App struct {
 	Version string
+	Commit  string // short commit hash of this build, if known
 	Port    int
 	Store   *store.Store
 	Pairing *pairing.Manager
@@ -101,6 +103,7 @@ func (a *App) Snapshot() Snapshot {
 	act := a.Server.Activity()
 	s := Snapshot{
 		Version: a.Version,
+		Commit:  a.Commit,
 		Name:    a.Store.Identity().Name,
 		PID:     os.Getpid(),
 		Port:    a.Port,

@@ -34,20 +34,9 @@ func cmdDaemon(args []string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(exe, append([]string{"serve", "--background"}, childArgs...)...)
-	system.Detach(cmd)
-	if err := cmd.Start(); err != nil {
+	c, err := startBackground(exe, dir, childArgs)
+	if err != nil {
 		return err
-	}
-	_ = cmd.Process.Release()
-
-	var c *control.Client
-	for i := 0; i < 80 && c == nil; i++ {
-		time.Sleep(150 * time.Millisecond)
-		c, _ = control.Connect(dir)
-	}
-	if c == nil {
-		return fmt.Errorf("the background service didn't start; see %s", filepath.Join(dir, logName))
 	}
 	if quiet {
 		return nil
@@ -61,6 +50,38 @@ func cmdDaemon(args []string) error {
 	return nil
 }
 
+// startBackground launches `exe serve --background` detached and waits until its control API answers.
+func startBackground(exe, dir string, serveArgs []string) (*control.Client, error) {
+	cmd := exec.Command(exe, append([]string{"serve", "--background"}, serveArgs...)...)
+	system.Detach(cmd)
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	_ = cmd.Process.Release()
+
+	for i := 0; i < 80; i++ {
+		time.Sleep(150 * time.Millisecond)
+		if c, err := control.Connect(dir); err == nil {
+			return c, nil
+		}
+	}
+	return nil, fmt.Errorf("the background service didn't start; see %s", filepath.Join(dir, logName))
+}
+
+// stopAndWait asks the running service to stop and waits until it has.
+func stopAndWait(c *control.Client, dir string) error {
+	if err := c.Stop(); err != nil {
+		return err
+	}
+	for i := 0; i < 50; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if _, err := control.Connect(dir); err != nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("asked phoneset to stop, but it is still running (PID %d)", c.Info.PID)
+}
+
 func cmdStop(args []string) error {
 	dir := configDir(flagValue(args, "--config-dir"))
 	c, err := control.Connect(dir)
@@ -68,17 +89,11 @@ func cmdStop(args []string) error {
 		fmt.Println("phoneset isn't running.")
 		return nil
 	}
-	if err := c.Stop(); err != nil {
+	if err := stopAndWait(c, dir); err != nil {
 		return err
 	}
-	for i := 0; i < 50; i++ {
-		time.Sleep(100 * time.Millisecond)
-		if _, err := control.Connect(dir); err != nil {
-			fmt.Println("phoneset stopped.")
-			return nil
-		}
-	}
-	return fmt.Errorf("asked phoneset to stop, but it is still running (PID %d)", c.Info.PID)
+	fmt.Println("phoneset stopped.")
+	return nil
 }
 
 func cmdStatus(args []string) error {
@@ -117,7 +132,7 @@ func printStatus(c *control.Client, s app.Snapshot) {
 	if c.Info.Mode == "background" {
 		where = "in the background"
 	}
-	fmt.Printf("%s %s %s  %s\n", term.Bold("phoneset"), s.Version, term.Green("running "+where),
+	fmt.Printf("%s %s %s  %s\n", term.Bold("phoneset"), buildLabel(s.Version, s.Commit), term.Green("running "+where),
 		term.Dim(fmt.Sprintf("(PID %d, up %s)", s.PID, since(c.Info.Started))))
 	fmt.Printf("  name             %s\n", s.Name)
 	for i, a := range s.Addrs {

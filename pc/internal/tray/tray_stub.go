@@ -23,6 +23,7 @@ type Actions struct {
 	OpenLog     func()
 	Autostart   system.Autostart
 	Exe         string
+	Update      Updater
 }
 
 func Run(context.Context, *app.App, Actions, func() error) error { return ErrUnavailable }

@@ -23,6 +23,7 @@ import (
 	"github.com/mehmetraufoguz/phoneset/pc/internal/system"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/term"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/tray"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/update"
 )
 
 const logName = "phoneset.log"
@@ -91,6 +92,8 @@ func cmdServe(args []string) error {
 		Port: *port, MicSelector: *micDev, SpeakerSelector: *spkDev, NoMic: *noMic, NoSpeaker: *noSpk,
 	}, st, pm, backend, log)
 	application := app.New(version, *port, st, pm, srv, backend, log)
+	build := currentBuild()
+	application.Commit = build.Short()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -99,12 +102,13 @@ func cmdServe(args []string) error {
 	if *background {
 		mode = "background"
 	}
-	ctl, err := control.Serve(ctx, st.Dir(), mode, application, stop)
+	serveArgs := dropFlags(args, "--background", "--pair")
+	ctl, err := control.Serve(ctx, st.Dir(), mode, serveArgs, application, stop)
 	if err != nil {
 		return err
 	}
 	defer control.Remove(st.Dir())
-	log.Info("phoneset started", "version", version, "mode", mode, "pid", ctl.PID)
+	log.Info("phoneset started", "version", version, "commit", build.Short(), "mode", mode, "pid", ctl.PID)
 
 	if !*background {
 		ui := &terminalUI{app: application, log: log}
@@ -152,7 +156,35 @@ func cmdServe(args []string) error {
 		OpenLog:     func() { _ = system.OpenFile(logPath) },
 		Autostart:   system.NewAutostart(),
 		Exe:         exe,
+		Update:      trayUpdater(build, mode, ctl.Args, log, stop),
 	}, work)
+}
+
+// trayUpdater is the tray's "Check for updates" entry.
+func trayUpdater(build update.Build, mode string, serveArgs []string, log *slog.Logger, stop func()) tray.Updater {
+	cl := update.NewClient()
+	return tray.Updater{
+		Version: buildLabel(build.Version, build.Commit),
+		Check:   func(ctx context.Context) (update.Result, error) { return cl.Check(ctx, build) },
+		Install: func(ctx context.Context, rel *update.Release) (bool, error) {
+			exe, err := installedExe()
+			if err != nil {
+				return false, err
+			}
+			if err := cl.Install(ctx, rel, exe, func(s string) { log.Info("update: " + s) }); err != nil {
+				return false, err
+			}
+			log.Info("update installed", "release", rel.Tag, "commit", rel.Short())
+			if mode != "background" {
+				return false, nil // a terminal session stays as it is; the next start uses the new build
+			}
+			if err := relaunchAfterQuit(exe, serveArgs); err != nil {
+				return false, err
+			}
+			stop()
+			return true, nil
+		},
+	}
 }
 
 // openLog opens the log for appending, starting a fresh file once it passes 2 MB.
@@ -171,7 +203,7 @@ type terminalUI struct {
 
 func (u *terminalUI) banner(ident store.Identity, micSel, spkSel string, noMic, noSpk bool) {
 	be := u.app.Backend
-	fmt.Printf("%s %s  ·  %s\n", term.Bold("phoneset"), version, ident.Name)
+	fmt.Printf("%s %s  ·  %s\n", term.Bold("phoneset"), buildLabel(version, currentBuild().Commit), ident.Name)
 	fmt.Printf("  audio backend      %s\n", be.Name())
 
 	switch dev, err := be.ResolveMic(micSel); {

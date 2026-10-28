@@ -33,6 +33,7 @@ type Info struct {
 	Token   string    `json:"token"`
 	Mode    string    `json:"mode"` // "terminal" or "background"
 	Started time.Time `json:"started"`
+	Args    []string  `json:"args,omitempty"` // the `serve` flags, so an update can start it the same way
 }
 
 func infoPath(dir string) string { return filepath.Join(dir, "control.json") }
@@ -49,8 +50,8 @@ type Handler interface {
 }
 
 // Serve listens on a free loopback port and publishes it until ctx ends.
-// stop is called for POST /api/stop.
-func Serve(ctx context.Context, dir, mode string, h Handler, stop func()) (Info, error) {
+// stop is called for POST /api/stop. args are the flags the agent was started with.
+func Serve(ctx context.Context, dir, mode string, args []string, h Handler, stop func()) (Info, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return Info{}, err
@@ -61,7 +62,7 @@ func Serve(ctx context.Context, dir, mode string, h Handler, stop func()) (Info,
 	}
 	info := Info{
 		PID: os.Getpid(), Port: ln.Addr().(*net.TCPAddr).Port, Token: hex.EncodeToString(tok),
-		Mode: mode, Started: time.Now(),
+		Mode: mode, Started: time.Now(), Args: args,
 	}
 	b, _ := json.Marshal(info)
 	if err := os.WriteFile(infoPath(dir), b, 0o600); err != nil {
