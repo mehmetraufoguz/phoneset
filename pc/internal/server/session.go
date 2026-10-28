@@ -25,6 +25,8 @@ type session struct {
 	srv    *Server
 	ch     *secure.Channel
 	dev    store.Device
+	from   string
+	since  time.Time
 	cancel context.CancelFunc
 	done   chan struct{}
 
@@ -39,9 +41,9 @@ type session struct {
 	spkDev audio.Device
 }
 
-func newSession(srv *Server, ch *secure.Channel, dev store.Device, cancel context.CancelFunc) *session {
+func newSession(srv *Server, ch *secure.Channel, dev store.Device, from string, cancel context.CancelFunc) *session {
 	return &session{
-		srv: srv, ch: ch, dev: dev, cancel: cancel,
+		srv: srv, ch: ch, dev: dev, from: from, since: time.Now(), cancel: cancel,
 		done: make(chan struct{}),
 		spkQ: make(chan []byte, speakerQueueFrames),
 	}
@@ -194,6 +196,7 @@ func (se *session) startMicLocked() error {
 	}
 	se.sink, se.micDev = sink, dev
 	se.srv.log.Info("microphone on", "into", dev.Name)
+	se.srv.changed()
 	return nil
 }
 
@@ -204,6 +207,7 @@ func (se *session) stopMicLocked() {
 	_ = se.sink.Close()
 	se.sink = nil
 	se.srv.log.Info("microphone off")
+	se.srv.changed()
 }
 
 func (se *session) startSpeakerLocked() error {
@@ -233,6 +237,7 @@ func (se *session) startSpeakerLocked() error {
 	}
 	se.src, se.spkDev = src, dev
 	se.srv.log.Info("headphones on", "from", dev.Name)
+	se.srv.changed()
 	return nil
 }
 
@@ -243,6 +248,7 @@ func (se *session) stopSpeakerLocked() {
 	_ = se.src.Close()
 	se.src = nil
 	se.srv.log.Info("headphones off")
+	se.srv.changed()
 }
 
 func (se *session) stopAll() {

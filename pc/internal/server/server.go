@@ -47,6 +47,80 @@ type Server struct {
 
 	mu     sync.Mutex
 	active *session
+
+	lmu       sync.Mutex
+	listeners []func()
+}
+
+// PhoneInfo describes the phone that is connected right now.
+type PhoneInfo struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	Platform string    `json:"platform"`
+	From     string    `json:"from"`
+	Since    time.Time `json:"since"`
+}
+
+type StreamInfo struct {
+	On     bool   `json:"on"`
+	Device string `json:"device,omitempty"`
+}
+
+// Activity is what the PC is doing for a phone right now.
+type Activity struct {
+	Phone   *PhoneInfo `json:"phone"`
+	Mic     StreamInfo `json:"mic"`
+	Speaker StreamInfo `json:"speaker"`
+}
+
+// Activity reports the connected phone and its running streams, if any.
+func (s *Server) Activity() Activity {
+	s.mu.Lock()
+	se := s.active
+	s.mu.Unlock()
+	if se == nil {
+		return Activity{}
+	}
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	a := Activity{Phone: &PhoneInfo{
+		ID: se.dev.ID, Name: se.dev.Name, Platform: se.dev.Platform, From: se.from, Since: se.since,
+	}}
+	if se.sink != nil {
+		a.Mic = StreamInfo{On: true, Device: se.micDev.Name}
+	}
+	if se.src != nil {
+		a.Speaker = StreamInfo{On: true, Device: se.spkDev.Name}
+	}
+	return a
+}
+
+// OnChange registers fn to run (on its own goroutine) whenever Activity may have changed.
+func (s *Server) OnChange(fn func()) {
+	s.lmu.Lock()
+	defer s.lmu.Unlock()
+	s.listeners = append(s.listeners, fn)
+}
+
+func (s *Server) changed() {
+	s.lmu.Lock()
+	fns := append([]func(){}, s.listeners...)
+	s.lmu.Unlock()
+	for _, fn := range fns {
+		go fn()
+	}
+}
+
+// Disconnect drops the connected phone. It reports whether there was one.
+func (s *Server) Disconnect() bool {
+	s.mu.Lock()
+	se := s.active
+	s.mu.Unlock()
+	if se == nil {
+		return false
+	}
+	se.cancel()
+	return true
 }
 
 func New(opt Options, st *store.Store, pm *pairing.Manager, be audio.Backend, log *slog.Logger) *Server {
@@ -115,7 +189,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	se := newSession(s, ch, dev, cancel)
+	se := newSession(s, ch, dev, remoteIP(r.RemoteAddr), cancel)
 	if err := s.attach(se); err != nil {
 		_ = sendJSON(ctx, ch, proto.Error{T: proto.TError, Code: proto.ErrBusy,
 			Message: "Another phone is already connected to this PC."})
@@ -258,6 +332,7 @@ func (s *Server) attach(se *session) error {
 		if old == nil {
 			s.active = se
 			s.mu.Unlock()
+			s.changed()
 			return nil
 		}
 		if old.dev.ID != se.dev.ID {
@@ -276,9 +351,13 @@ func (s *Server) attach(se *session) error {
 
 func (s *Server) detach(se *session) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.active == se {
+	was := s.active == se
+	if was {
 		s.active = nil
+	}
+	s.mu.Unlock()
+	if was {
+		s.changed()
 	}
 }
 
