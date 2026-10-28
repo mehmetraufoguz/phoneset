@@ -5,6 +5,7 @@
     "includes": [
       "**",
       "!pc",
+      "!skills",
       "!mobile/ios",
       "!mobile/android",
       "!mobile/.expo",
