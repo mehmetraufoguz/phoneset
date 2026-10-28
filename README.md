@@ -11,6 +11,7 @@ Use your phone as your PC's **microphone** and **headphones** over Wi-Fi.
 | ------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `pc/`              | The PC side. A Go program you run in a terminal, no window. Windows and macOS.                               |
 | `mobile/`          | The phone app. Expo (SwiftUI on iOS, Jetpack Compose on Android through Expo UI), logic written with Effect. |
+| `scripts/`         | `install-mac.sh` (one-line macOS install) and `icons.py` (draws the icon for phone and PC).                  |
 | `docs/protocol.md` | The wire protocol and its security model.                                                                    |
 
 ## Using it
@@ -67,7 +68,19 @@ Pairings are stored in `%AppData%\phoneset\`.
 
 #### macOS (12 or later)
 
-Build it on the Mac (macOS audio needs cgo, so the Xcode command line tools must be
+One line (downloads the latest release, installs `phoneset` to `~/.local/bin`, adds it to your
+`PATH`; the repository is private, so this goes through the GitHub CLI: `brew install gh && gh auth login`):
+
+```sh
+gh api repos/mehmetraufoguz/phoneset/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh -s -- --start
+```
+
+Add `--autostart` to also start it at every login and `--with-blackhole` to install the virtual
+microphone with Homebrew (once the repository is public, `curl -fsSL
+https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-mac.sh | sh` works too).
+Releases appear when a version tag is pushed (`git tag v0.2.0 && git push origin v0.2.0`).
+
+Or build it on the Mac (macOS audio needs cgo, so the Xcode command line tools must be
 installed), or take `phoneset-macos-arm64` / `phoneset-macos-amd64` from the CI artifacts
 (`chmod +x phoneset` and `xattr -d com.apple.quarantine phoneset` for a downloaded one):
 
@@ -93,8 +106,11 @@ allow it, it hands over silence without any error:
 
 1. Run `phoneset test` and play something on the Mac. The meter should move.
 2. If it stays silent and says "Nothing was captured", open System Settings > Privacy &
-   Security > Screen & System Audio Recording, switch on the app you run phoneset from
-   (Terminal, iTerm...), quit and reopen it, and run `phoneset test` again.
+   Security > Screen & System Audio Recording, switch on the app you run phoneset from,
+   quit and reopen it, and run `phoneset test` again. macOS only offers the permission to
+   apps that declare a system-audio usage description, and Terminal.app doesn't; if it never
+   shows up there, run phoneset from iTerm2 or the VS Code terminal, or use the BlackHole 16ch
+   route below.
 
 On older macOS, or if you would rather route it yourself, capture a virtual input instead:
 install BlackHole 16ch, make a Multi-Output Device in Audio MIDI Setup with your speakers
@@ -103,6 +119,31 @@ and BlackHole 16ch, set it as the system output, and run
 Microphone permission for your terminal.
 
 Pairings are stored in `~/Library/Application Support/phoneset/`.
+
+### Running in the background
+
+In a terminal phoneset runs until you press Ctrl+C. To keep it running without a window:
+
+```
+phoneset daemon              start in the background (tray icon on Windows and macOS)
+phoneset status              who is connected and what is streaming (--json for scripts)
+phoneset pair                QR code and code for the running service (--browser opens a page)
+phoneset stop
+phoneset logs                where the log is, and its last lines
+phoneset autostart enable    start it in the background at every login (disable, status)
+```
+
+The first `phoneset daemon` with no paired phone opens a pairing page in your browser: a page
+served by phoneset itself, reachable only from this PC, with the QR code and the code. The
+tray icon is the app's icon, with a green dot while a phone is connected. Its menu shows who
+is connected and what streams, and has **Pair a phone…**, **Disconnect phone**, **Paired
+phones** (forget one), **Start at login**, **Open log** and **Quit**.
+
+Starting at login is opt-in. On Windows it adds a per-user entry under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; on macOS it installs a LaunchAgent
+(`~/Library/LaunchAgents/dev.mehmetraufoguz.phoneset.plist`) that launchd restarts after a crash
+but not after a clean quit. `phoneset autostart disable` (or the tray menu) removes it. The log
+is `phoneset.log` next to the pairings. Only one instance runs per config directory.
 
 ### 2. On the phone
 
@@ -115,10 +156,24 @@ pnpm mobile:ios        # needs Xcode
 pnpm mobile:android    # needs Android Studio / SDK
 ```
 
-Open the app, tap **Pair a PC**, scan the QR code (or type the 6-digit code; the PC shows
+Open the app, tap **+** (top right), scan the QR code (or type the 6-digit code; the PC shows
 up in the list through mDNS, or type its address). Scanning the QR with the phone's own
 camera app works too. After that, tap the PC on the home screen to connect, and switch
 **Microphone** and **Headphones** on.
+
+The connected PC is marked in the list with what it is doing ("Connected · Microphone on").
+Going back from the controls keeps the connection; **Disconnect** ends it. While connected the
+phone shows it outside the app too, so you can see it is working:
+
+- **Android**: a notification that stays in the shade, backed by a foreground service that also
+  keeps the connection alive in the background (it needs the microphone permission first).
+- **iOS**: a Live Activity on the lock screen and in the Dynamic Island. iOS has no notification
+  that can't be swiped away, so this is the nearest thing; the activity is refreshed while the app
+  runs and iOS dims it as out of date if the app is suspended. The connection itself stays alive in
+  the background while the microphone or headphones are on. It is **off by default**: the widget
+  extension shares an App Group with the app, and that group has to be registered once in your Apple
+  Developer account (Certificates, Identifiers & Profiles > Identifiers > App Groups:
+  `group.dev.mehmetraufoguz.phoneset`). Then build with `PHONESET_LIVE_ACTIVITY=1 pnpm mobile:ios`.
 
 If the phone can't find the PC: both must be on the same Wi-Fi (guest networks and
 "client isolation" block it), and the PC's firewall must allow phoneset on private networks.
@@ -129,7 +184,10 @@ If the phone can't find the PC: both must be on the same Wi-Fi (guest networks a
 `secure` (X25519 + ChaCha20-Poly1305 channel), `pairing` (code/secret offers),
 `store` (identity and paired phones), `server` (WebSocket, auth, sessions),
 `discovery` (mDNS and addresses), `audio` (the `Backend` interface, jitter buffer,
-resampling) and `term` (QR and logging). Windows audio is `audio/backend_windows.go`
+resampling), `app` (one `Snapshot` of what the agent is doing, read by every front end),
+`control` (the loopback API and pairing page behind `status`/`pair`/`stop` and the tray),
+`tray` (menu bar / system tray through `fyne.io/systray`), `system` (detaching, opening
+URLs, start at login), `icons` and `term` (QR and logging). Windows audio is `audio/backend_windows.go`
 (WASAPI, pure Go through `go-wca`, so it cross-compiles with no C toolchain). macOS audio
 is `audio/backend_darwin.go` plus `ca_darwin.m` (CoreAudio, cgo): the audio threads and a
 lock-free ring buffer live in C/Objective-C, and Go only polls the ring, so no Go code ever
@@ -143,8 +201,11 @@ Anywhere else, and macOS built with `CGO_ENABLED=0`, gets a synthetic developmen
 wired by layers, a typed protocol (`Schema`), the encrypted channel, and the session state
 machine, which reconnects on its own after a drop. `src/platform` supplies the native
 implementations (`react-native-audio-api`, `react-native-zeroconf`, `expo-secure-store`,
-`expo-crypto`). `src/app` is expo-router; screens use Expo UI's universal components, so
-iOS renders SwiftUI and Android renders Compose from one source.
+`expo-crypto`). `src/core/presence.ts` turns the session into the text shown outside the app, and
+`src/platform/presence.ts` puts it in an Android notification or an iOS Live Activity
+(`src/widgets`, written with Expo UI through `expo-widgets`). `src/app` is expo-router;
+screens use Expo UI's universal components, so iOS renders SwiftUI and Android renders
+Compose from one source.
 
 ## Development
 
@@ -163,21 +224,24 @@ Tests are deliberately not committed to this repository.
 
 ## Status
 
-Working and verified: the protocol end to end (pairing by code and by QR, rate limiting,
-token reconnects, encrypted streaming both ways) between the real phone-side code and the
-real Go server, and the iOS app bundle. On macOS, the CoreAudio backend lists the real
-devices, plays into an output device for seconds on end without a single underrun, and runs
-a full session against the phone-side code (the tap opens, starts and stops cleanly).
+Verified on real hardware: **Windows** (WASAPI) in both directions with an iPhone 13 Pro, the
+microphone through VB-CABLE and the headphones through loopback. Also verified: the protocol end
+to end (pairing by code and by QR, rate limiting, token reconnects, encrypted streaming both ways)
+between the real phone-side code and the real Go server; on macOS the CoreAudio backend (real
+devices, an output device fed for seconds without an underrun, a full session against the
+phone-side code); the daemon on macOS (starts detached, `status`/`pair`/`stop`, the control API's
+token and Host checks, the LaunchAgent enable/disable cycle) and the installer.
 
-Not yet exercised on real hardware:
+Not yet exercised:
 
-- the WASAPI backend on a Windows machine (it compiles and passes `go vet` on a Windows
-  runner, but hasn't run against real devices);
+- on Windows, the daemon, the tray, start at login and the executable's icon (they compile and pass
+  `go vet` on a Windows runner but have not run);
 - on macOS, **the audio content of the system-audio tap** (macOS delivers silence until the
-  permission above is granted, which couldn't be done where this was developed; use
-  `phoneset test` to check), the BlackHole microphone path (BlackHole wasn't installed),
-  capturing an input device, Intel Macs and macOS before 14.2;
-- the Android build, and background operation on either phone.
+  permission above is granted; use `phoneset test` to check), the BlackHole microphone path,
+  capturing an input device, Intel Macs and macOS before 14.2, and the menu bar icon (the process
+  runs the tray without errors, but there was no way to look at the menu bar);
+- the Live Activity (needs the App Group above, so it has not been built), the Android notification
+  and build, and background operation.
 
 Expect to tune the jitter buffer (`audio.NewPlayout`, 60 ms target) on your Wi-Fi.
 
