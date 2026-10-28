@@ -1,8 +1,34 @@
+diff --git a/ios/audioapi/ios/system/AudioEngine.h b/ios/audioapi/ios/system/AudioEngine.h
+index 71279285cf833428f31e1f9c33d05b33c5c15b74..ad0533af7fff9240b84e79aa1fd472a34951fce6 100644
+--- a/ios/audioapi/ios/system/AudioEngine.h
++++ b/ios/audioapi/ios/system/AudioEngine.h
+@@ -54,6 +54,11 @@ typedef NS_ENUM(NSInteger, AudioEngineState) {
+ 
+ - (void)restartAudioEngine;
+ 
++/// YES shortly after this engine switched voice processing itself. Turning it on makes AVFoundation
++/// post a configuration change for the engine, and answering that with a rebuild (which turns it on
++/// again) is an endless loop.
++- (BOOL)isConfigurationChangeSelfInduced;
++
+ - (void)logAudioEngineState;
+ 
+ @end
 diff --git a/ios/audioapi/ios/system/AudioEngine.mm b/ios/audioapi/ios/system/AudioEngine.mm
-index d0e77d89c1d26f721e093702b2fd75e02339a86e..47ff8803fd22d5bba8b5475abab86011d6ab6698 100644
+index d0e77d89c1d26f721e093702b2fd75e02339a86e..b768b478bb300edfe3d4e59572e1540f04d1334e 100644
 --- a/ios/audioapi/ios/system/AudioEngine.mm
 +++ b/ios/audioapi/ios/system/AudioEngine.mm
-@@ -39,6 +39,7 @@ - (BOOL)hasTrackedGraph;
+@@ -27,6 +27,9 @@ @implementation AudioEngineInputRegistration
+ @interface AudioEngine () {
+   std::recursive_mutex _engineLock;
+   BOOL _isRebuildingAudioEngine;
++  NSTimeInterval _voiceProcessingToggledAt;
++  NSTimeInterval _restartWindowStart;
++  int _restartCount;
+ }
+ 
+ @property (nonatomic, strong)
+@@ -39,6 +42,7 @@ - (BOOL)hasTrackedGraph;
  - (AVAudioFormat *)currentInputConnectionFormat;
  - (void)materializeSourceNodeWithId:(NSString *)sourceNodeId;
  - (BOOL)materializeInputNodeIfNeeded;
@@ -10,7 +36,7 @@ index d0e77d89c1d26f721e093702b2fd75e02339a86e..47ff8803fd22d5bba8b5475abab86011
  - (void)materializeTrackedNodesIfNeeded;
  
  - (AVAudioFormat *)liveInputFormat;
-@@ -197,6 +198,38 @@ - (AVAudioFormat *)currentInputConnectionFormat
+@@ -197,6 +201,48 @@ - (AVAudioFormat *)currentInputConnectionFormat
    return inputFormat;
  }
  
@@ -26,6 +52,13 @@ index d0e77d89c1d26f721e093702b2fd75e02339a86e..47ff8803fd22d5bba8b5475abab86011
 +      [mode isEqualToString:AVAudioSessionModeVideoChat];
 +  AVAudioInputNode *engineInputNode = self.audioEngine.inputNode;
 +
++  NSLog(
++      @"[AudioEngine] voice processing: wanted=%d current=%d engineRunning=%d mode=%@",
++      wanted,
++      engineInputNode.isVoiceProcessingEnabled,
++      [self.audioEngine isRunning],
++      mode);
++
 +  if (engineInputNode.isVoiceProcessingEnabled == wanted) {
 +    return YES;
 +  }
@@ -37,7 +70,10 @@ index d0e77d89c1d26f721e093702b2fd75e02339a86e..47ff8803fd22d5bba8b5475abab86011
 +  }
 +
 +  NSError *error = nil;
-+  if (![engineInputNode setVoiceProcessingEnabled:wanted error:&error]) {
++  _voiceProcessingToggledAt = [NSProcessInfo processInfo].systemUptime;
++  BOOL switched = [engineInputNode setVoiceProcessingEnabled:wanted error:&error];
++  _voiceProcessingToggledAt = [NSProcessInfo processInfo].systemUptime;
++  if (!switched) {
 +    NSLog(
 +        @"[AudioEngine] Couldn't %@ voice processing: %@",
 +        wanted ? @"enable" : @"disable",
@@ -49,7 +85,7 @@ index d0e77d89c1d26f721e093702b2fd75e02339a86e..47ff8803fd22d5bba8b5475abab86011
  - (BOOL)materializeInputNodeIfNeeded
  {
    if (self.inputRegistration == nil) {
-@@ -219,6 +252,10 @@ - (BOOL)materializeInputNodeIfNeeded
+@@ -219,6 +265,10 @@ - (BOOL)materializeInputNodeIfNeeded
      return NO;
    }
  
@@ -60,3 +96,54 @@ index d0e77d89c1d26f721e093702b2fd75e02339a86e..47ff8803fd22d5bba8b5475abab86011
    AVAudioFormat *inputFormat = [self currentInputConnectionFormat];
  
    if (inputFormat == nil) {
+@@ -437,6 +487,7 @@ - (void)rebuildAudioEngineAndResumeIfNeeded
+   }
+ 
+   _isRebuildingAudioEngine = YES;
++  NSLog(@"[AudioEngine] rebuilding the engine (state=%ld)", (long)self.state);
+ 
+   if ([self.audioEngine isRunning]) {
+     [self.audioEngine stop];
+@@ -568,9 +619,26 @@ - (void)stopIfPossible
+   }
+ }
+ 
++- (BOOL)isConfigurationChangeSelfInduced
++{
++  return [NSProcessInfo processInfo].systemUptime - _voiceProcessingToggledAt < 1.5;
++}
++
+ - (void)restartAudioEngine
+ {
+   std::scoped_lock lock(_engineLock);
++
++  // A safety valve: whatever keeps asking for restarts, never rebuild the engine in a tight loop on
++  // the main thread (that froze the app).
++  NSTimeInterval now = [NSProcessInfo processInfo].systemUptime;
++  if (now - _restartWindowStart > 2.0) {
++    _restartWindowStart = now;
++    _restartCount = 0;
++  }
++  if (++_restartCount > 4) {
++    NSLog(@"[AudioEngine] too many engine restarts in a row, ignoring this one");
++    return;
++  }
+   [self rebuildAudioEngineAndResumeIfNeeded];
+ }
+ 
+diff --git a/ios/audioapi/ios/system/SystemNotificationManager.mm b/ios/audioapi/ios/system/SystemNotificationManager.mm
+index 5557d585554ba6681fd510cb8934cba87bc7ee4e..dde723b37f68f288387a7ffcd247e82578b696b5 100644
+--- a/ios/audioapi/ios/system/SystemNotificationManager.mm
++++ b/ios/audioapi/ios/system/SystemNotificationManager.mm
+@@ -249,6 +249,11 @@ - (void)handleMediaServicesReset:(NSNotification *)notification
+ 
+ - (void)handleEngineConfigurationChange:(NSNotification *)notification
+ {
++  if ([self.audioAPIModule.audioEngine isConfigurationChangeSelfInduced]) {
++    NSLog(@"[NotificationManager] engine configuration change caused by switching voice processing, ignored");
++    return;
++  }
++  NSLog(@"[NotificationManager] engine configuration change, restarting the engine");
+   AudioEngine *audioEngine = self.audioAPIModule.audioEngine;
+   AudioSessionManager *sessionManager = self.audioAPIModule.audioSessionManager;
+ 

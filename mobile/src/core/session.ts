@@ -109,7 +109,7 @@ export class Session extends Context.Service<
     readonly stop: Effect.Effect<void>
     readonly setMic: (on: boolean) => Effect.Effect<void>
     readonly setSpeaker: (on: boolean) => Effect.Effect<void>
-    /** Applies at once: a running microphone is restarted to pick it up. */
+    /** Running streams are stopped and started again so the audio session can take the new mode. */
     readonly setVoiceProcessing: (on: boolean) => Effect.Effect<void>
   }
 >()("phoneset/Session") {
@@ -567,10 +567,16 @@ function makeSession() {
         Effect.gen(function* () {
           yield* Ref.set(voiceProcessing, on)
           yield* whenConnected((s) => ({ ...s, echoCancellation: on }))
+          // Remembered now; applied by the next stream to open (never under a running one).
           yield* audio.configure({ voiceProcessing: on }).pipe(Effect.ignore)
-          // The microphone's audio path is built when it starts, so a running one starts over.
-          if ((yield* Ref.get(desired)).mic) {
-            yield* Queue.offerAll(commands, [{ mic: false }, { mic: true }])
+          // Streams that are running keep the old mode, so they all stop and start again together:
+          // the audio session is let go of and set up again with the new mode.
+          const d = yield* Ref.get(desired)
+          if (d.mic || d.speaker) {
+            yield* Queue.offerAll(commands, [
+              { ...(d.mic ? { mic: false } : {}), ...(d.speaker ? { speaker: false } : {}) },
+              { ...(d.mic ? { mic: true } : {}), ...(d.speaker ? { speaker: true } : {}) }
+            ])
           }
         })
     })

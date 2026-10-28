@@ -13,27 +13,35 @@ const audioError = (message: string) => (cause: unknown) =>
 let voiceProcessing = false
 let sessionUsers = 0
 
-const configure = (options: AudioOptions) =>
-  Effect.try({
-    try: () => {
-      voiceProcessing = options.voiceProcessing
-      AudioManager.setAudioSessionOptions({
-        iosCategory: "playAndRecord",
-        // voiceChat turns on the system's echo cancellation and noise suppression.
-        iosMode: options.voiceProcessing ? "voiceChat" : "default",
-        iosOptions: options.voiceProcessing
-          ? ["defaultToSpeaker", "allowBluetoothHFP", "allowBluetoothA2DP"]
-          : ["defaultToSpeaker", "allowBluetoothA2DP"]
-      })
-    },
-    catch: audioError("Couldn't set up the audio session.")
-  })
+const applySessionOptions = Effect.try({
+  try: () => {
+    AudioManager.setAudioSessionOptions({
+      iosCategory: "playAndRecord",
+      // voiceChat turns on the system's echo cancellation and noise suppression.
+      iosMode: voiceProcessing ? "voiceChat" : "default",
+      iosOptions: voiceProcessing
+        ? ["defaultToSpeaker", "allowBluetoothHFP", "allowBluetoothA2DP"]
+        : ["defaultToSpeaker", "allowBluetoothA2DP"]
+    })
+  },
+  catch: audioError("Couldn't set up the audio session.")
+})
+
+/**
+ * Remembers the mode. While a stream is running the session is left alone: iOS rebuilds the audio
+ * engine when its mode changes, and doing that under a live engine froze the app. The next stream
+ * to open (see useSession) applies it.
+ */
+const configure = (options: AudioOptions) => {
+  voiceProcessing = options.voiceProcessing
+  return sessionUsers > 0 ? Effect.void : applySessionOptions
+}
 
 /** The mic and the player share one session; it stays active while either is open. */
 const useSession = Effect.acquireRelease(
   Effect.gen(function* () {
     if (sessionUsers++ === 0) {
-      yield* configure({ voiceProcessing })
+      yield* applySessionOptions
       yield* Effect.tryPromise({
         try: () => AudioManager.setAudioSessionActivity(true),
         catch: audioError("Couldn't start the audio session.")
