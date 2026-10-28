@@ -58,6 +58,8 @@ export type SessionState =
       readonly rttMs: number | null
       readonly micLevel: number
       readonly stats: StatsMessage | null
+      /** The phone's voice-call audio mode, which cancels the echo of its own speaker. */
+      readonly echoCancellation: boolean
     }
   | { readonly _tag: "Failed"; readonly message: string; readonly code: string | null }
 
@@ -107,7 +109,7 @@ export class Session extends Context.Service<
     readonly stop: Effect.Effect<void>
     readonly setMic: (on: boolean) => Effect.Effect<void>
     readonly setSpeaker: (on: boolean) => Effect.Effect<void>
-    /** Takes effect the next time a stream starts. */
+    /** Applies at once: a running microphone is restarted to pick it up. */
     readonly setVoiceProcessing: (on: boolean) => Effect.Effect<void>
   }
 >()("phoneset/Session") {
@@ -302,7 +304,8 @@ function makeSession() {
           speaker: toStatus(ready.speaker),
           rttMs: null,
           micLevel: 0,
-          stats: null
+          stats: null,
+          echoCancellation: yield* Ref.get(voiceProcessing)
         })
 
         const setMicStatus = (patch: Partial<StreamStatus>) =>
@@ -560,7 +563,16 @@ function makeSession() {
       stop,
       setMic: (on) => request({ mic: on }).pipe(Effect.asVoid),
       setSpeaker: (on) => request({ speaker: on }).pipe(Effect.asVoid),
-      setVoiceProcessing: (on) => Ref.set(voiceProcessing, on)
+      setVoiceProcessing: (on) =>
+        Effect.gen(function* () {
+          yield* Ref.set(voiceProcessing, on)
+          yield* whenConnected((s) => ({ ...s, echoCancellation: on }))
+          yield* audio.configure({ voiceProcessing: on }).pipe(Effect.ignore)
+          // The microphone's audio path is built when it starts, so a running one starts over.
+          if ((yield* Ref.get(desired)).mic) {
+            yield* Queue.offerAll(commands, [{ mic: false }, { mic: true }])
+          }
+        })
     })
   })
 }

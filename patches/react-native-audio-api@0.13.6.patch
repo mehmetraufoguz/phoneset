@@ -1,0 +1,62 @@
+diff --git a/ios/audioapi/ios/system/AudioEngine.mm b/ios/audioapi/ios/system/AudioEngine.mm
+index d0e77d89c1d26f721e093702b2fd75e02339a86e..47ff8803fd22d5bba8b5475abab86011d6ab6698 100644
+--- a/ios/audioapi/ios/system/AudioEngine.mm
++++ b/ios/audioapi/ios/system/AudioEngine.mm
+@@ -39,6 +39,7 @@ - (BOOL)hasTrackedGraph;
+ - (AVAudioFormat *)currentInputConnectionFormat;
+ - (void)materializeSourceNodeWithId:(NSString *)sourceNodeId;
+ - (BOOL)materializeInputNodeIfNeeded;
++- (BOOL)syncVoiceProcessing;
+ - (void)materializeTrackedNodesIfNeeded;
+ 
+ - (AVAudioFormat *)liveInputFormat;
+@@ -197,6 +198,38 @@ - (AVAudioFormat *)currentInputConnectionFormat
+   return inputFormat;
+ }
+ 
++/// The session's voice chat modes only set up routing and gain. The echo canceller is the
++/// voice-processing I/O unit, which an engine uses only once voice processing is switched on for its
++/// input node, so keep that switch in line with the session mode.
++/// Returns NO when the engine was running: voice processing changes the hardware formats, which live
++/// connections can't follow, so the engine is stopped and flagged to be rebuilt by its next start.
++- (BOOL)syncVoiceProcessing
++{
++  AVAudioSessionMode mode = [AVAudioSession sharedInstance].mode;
++  BOOL wanted = [mode isEqualToString:AVAudioSessionModeVoiceChat] ||
++      [mode isEqualToString:AVAudioSessionModeVideoChat];
++  AVAudioInputNode *engineInputNode = self.audioEngine.inputNode;
++
++  if (engineInputNode.isVoiceProcessingEnabled == wanted) {
++    return YES;
++  }
++
++  if ([self.audioEngine isRunning]) {
++    [self.audioEngine stop];
++    self.sessionDeactivationInvalidatedGraph = YES;
++    return NO;
++  }
++
++  NSError *error = nil;
++  if (![engineInputNode setVoiceProcessingEnabled:wanted error:&error]) {
++    NSLog(
++        @"[AudioEngine] Couldn't %@ voice processing: %@",
++        wanted ? @"enable" : @"disable",
++        [error debugDescription]);
++  }
++  return YES;
++}
++
+ - (BOOL)materializeInputNodeIfNeeded
+ {
+   if (self.inputRegistration == nil) {
+@@ -219,6 +252,10 @@ - (BOOL)materializeInputNodeIfNeeded
+     return NO;
+   }
+ 
++  if (![self syncVoiceProcessing]) {
++    return NO;
++  }
++
+   AVAudioFormat *inputFormat = [self currentInputConnectionFormat];
+ 
+   if (inputFormat == nil) {

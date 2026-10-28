@@ -1,7 +1,7 @@
 import { Button, FieldGroup, Host, Row, Slider, Spacer, Switch, Text } from "@expo/ui"
 import { useKeepAwake } from "expo-keep-awake"
 import { useRouter } from "expo-router"
-import { useState } from "react"
+import { Platform } from "react-native"
 import { Session, type SessionState, type StreamStatus } from "../core/session"
 import { act, BRAND, useColors, useSessionState } from "../ui/hooks"
 
@@ -54,7 +54,6 @@ function Connected({
   onDisconnect: () => void
 }) {
   const colors = useColors()
-  const [echoCancellation, setEchoCancellation] = useState(false)
 
   const detail = (s: StreamStatus, on: string, off: string) =>
     s.error ?? (s.on ? on : s.available ? off : "Not available on this PC")
@@ -117,18 +116,24 @@ function Connected({
       </FieldGroup.Section>
 
       <FieldGroup.Section title="Sound">
-        <Switch
-          label="Echo cancellation"
-          value={echoCancellation}
-          onValueChange={(on) => {
-            setEchoCancellation(on)
-            act(Session.use((s) => s.setVoiceProcessing(on)))
-          }}
-        />
-        <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
-          Helps when the phone's speaker is on. Applies the next time you switch the microphone or
-          headphones on.
-        </Text>
+        {Platform.OS === "ios" ? (
+          <>
+            <Switch
+              label="Echo cancellation"
+              value={state.echoCancellation}
+              onValueChange={(on) => act(Session.use((s) => s.setVoiceProcessing(on)))}
+            />
+            <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
+              Keeps the sound from the phone's own speaker out of its microphone. It puts the phone
+              in its voice-call audio mode, so the PC's audio may sound different while it is on.
+              Earphones avoid echo altogether.
+            </Text>
+          </>
+        ) : (
+          <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
+            Echo cancellation isn't available on Android yet. Earphones avoid echo altogether.
+          </Text>
+        )}
         {diagnostics === "" ? null : (
           <Text textStyle={{ fontSize: 13, color: colors.secondary }}>{diagnostics}</Text>
         )}
