@@ -26,6 +26,30 @@ jobs:
           name: phoneset-windows
           path: pc/phoneset.exe
 
+  pc-macos:
+    # The CoreAudio backend uses cgo (Objective-C), so it needs a Mac to build on.
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, amd64]
+    env:
+      GOARCH: ${{ matrix.arch }}
+      CGO_ENABLED: "1"
+    defaults:
+      run:
+        working-directory: pc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: pc/go.mod
+      - run: go vet ./...
+      - run: go build -trimpath -ldflags "-s -w" -o phoneset ./cmd/phoneset
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phoneset-macos-${{ matrix.arch }}
+          path: pc/phoneset
+
   mobile:
     runs-on: ubuntu-latest
     steps:

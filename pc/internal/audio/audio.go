@@ -17,6 +17,12 @@ type Device struct {
 	// Virtual marks endpoints that look like a virtual cable and can therefore
 	// serve as the PC-side "microphone".
 	Virtual bool
+	// Mic: the phone's microphone can be played into this device.
+	// Speaker: this device's audio can be captured and sent to the phone.
+	// Windows can do both with every playback device; macOS plays into output
+	// devices and captures from input devices.
+	Mic     bool
+	Speaker bool
 }
 
 // Sink plays the phone's microphone into the PC. Write takes 48 kHz mono s16le.
@@ -37,20 +43,27 @@ type FrameFunc func(pcm []byte)
 // Backend abstracts the platform audio stack.
 type Backend interface {
 	Name() string
-	// Playback lists render endpoints (used for both roles).
-	Playback() ([]Device, error)
-	// ResolveMic picks the render endpoint that carries the virtual microphone.
+	// MicHint tells the user what to install when no virtual cable is found.
+	MicHint() string
+	// CaptureHint says what to check when the headphone source delivers nothing.
+	CaptureHint() string
+	// Devices lists every device the backend can use, with the roles it can play.
+	Devices() ([]Device, error)
+	// ResolveMic picks the device that carries the virtual microphone.
 	// An empty selector means "find a known virtual cable".
 	ResolveMic(selector string) (Device, error)
-	// ResolveSpeaker picks the render endpoint whose output is sent to the phone.
-	// An empty selector means the system default.
+	// ResolveSpeaker picks the device whose audio is sent to the phone.
+	// An empty selector means the best default for the platform.
 	ResolveSpeaker(selector string) (Device, error)
 	OpenMic(dev Device) (Sink, error)
 	OpenSpeaker(dev Device, onFrame FrameFunc, onErr func(error)) (Source, error)
 }
 
 // virtualCableHints are substrings of well-known virtual cable endpoints.
-var virtualCableHints = []string{"cable input", "hi-fi cable", "voicemeeter input", "virtual cable"}
+var virtualCableHints = []string{
+	"cable input", "hi-fi cable", "voicemeeter input", "virtual cable", // Windows: VB-CABLE, VoiceMeeter
+	"blackhole", "loopback audio", "soundflower", // macOS
+}
 
 func looksVirtual(name string) bool {
 	n := strings.ToLower(name)
@@ -94,4 +107,14 @@ func defaultDevice(devs []Device) (Device, error) {
 		}
 	}
 	return Device{}, ErrNoDevice
+}
+
+func filter(devs []Device, keep func(Device) bool) []Device {
+	var out []Device
+	for _, d := range devs {
+		if keep(d) {
+			out = append(out, d)
+		}
+	}
+	return out
 }

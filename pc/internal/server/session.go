@@ -120,7 +120,7 @@ func (se *session) ready() proto.Ready {
 	case opt.NoMic:
 		r.Mic.Reason = "Turned off on the PC (--no-mic)."
 	case err != nil:
-		r.Mic.Reason = micMissing(opt.MicSelector)
+		r.Mic.Reason = micMissing(opt.MicSelector, se.srv.audio.MicHint())
 	default:
 		r.Mic = proto.Endpoint{Available: true, Device: dev.Name}
 	}
@@ -135,11 +135,11 @@ func (se *session) ready() proto.Ready {
 	return r
 }
 
-func micMissing(selector string) string {
+func micMissing(selector, hint string) string {
 	if selector != "" {
 		return fmt.Sprintf("No playback device matching %q.", selector)
 	}
-	return "No virtual cable found on the PC. Install VB-CABLE so apps can use the phone as a microphone."
+	return "No virtual cable found on the PC. " + hint
 }
 
 // applyStream starts or stops streams and reports the effective state.
@@ -183,7 +183,7 @@ func (se *session) startMicLocked() error {
 	}
 	dev, err := se.srv.audio.ResolveMic(se.srv.opt.MicSelector)
 	if err != nil {
-		return errors.New(micMissing(se.srv.opt.MicSelector))
+		return errors.New(micMissing(se.srv.opt.MicSelector, se.srv.audio.MicHint()))
 	}
 	if se.src != nil && se.spkDev.ID == dev.ID {
 		return errSameDevice

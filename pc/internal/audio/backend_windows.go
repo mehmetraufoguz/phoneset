@@ -30,17 +30,22 @@ func init() {
 	_, _, _ = syscall.NewLazyDLL("winmm.dll").NewProc("timeBeginPeriod").Call(1)
 }
 
-const (
-	pollInterval   = 5 * time.Millisecond
-	renderTargetMs = 30
-	hundredNsPerMs = 10_000
-)
+const hundredNsPerMs = 10_000
 
 type winBackend struct{}
 
 func NewBackend() Backend { return winBackend{} }
 
 func (winBackend) Name() string { return "WASAPI" }
+
+func (winBackend) CaptureHint() string {
+	return "Windows only delivers audio while something is playing on that device. " +
+		"Make sure the app you are listening to plays on it (see `phoneset audio`)."
+}
+
+func (winBackend) MicHint() string {
+	return "Install VB-CABLE (vb-audio.com/Cable) so apps can pick your phone as a microphone."
+}
 
 // withCOM runs fn on a locked OS thread with COM initialised.
 func withCOM(fn func() error) error {
@@ -98,7 +103,7 @@ func deviceInfo(mmd *wca.IMMDevice) (id, name string) {
 	return id, name
 }
 
-func (winBackend) Playback() (devs []Device, err error) {
+func (winBackend) Devices() (devs []Device, err error) {
 	err = withCOM(func() error {
 		mmde, err := newEnumerator()
 		if err != nil {
@@ -129,7 +134,10 @@ func (winBackend) Playback() (devs []Device, err error) {
 			}
 			id, name := deviceInfo(mmd)
 			mmd.Release()
-			devs = append(devs, Device{ID: id, Name: name, Default: id == defaultID, Virtual: looksVirtual(name)})
+			devs = append(devs, Device{
+				ID: id, Name: name, Default: id == defaultID, Virtual: looksVirtual(name),
+				Mic: true, Speaker: true,
+			})
 		}
 		return nil
 	})
@@ -137,7 +145,7 @@ func (winBackend) Playback() (devs []Device, err error) {
 }
 
 func (b winBackend) ResolveMic(selector string) (Device, error) {
-	devs, err := b.Playback()
+	devs, err := b.Devices()
 	if err != nil {
 		return Device{}, err
 	}
@@ -148,7 +156,7 @@ func (b winBackend) ResolveMic(selector string) (Device, error) {
 }
 
 func (b winBackend) ResolveSpeaker(selector string) (Device, error) {
-	devs, err := b.Playback()
+	devs, err := b.Devices()
 	if err != nil {
 		return Device{}, err
 	}
@@ -319,11 +327,8 @@ func (s *winSink) run(id string, ready chan<- error) {
 	ready <- nil
 
 	var (
-		res     = NewResampler(48000, c.format.Rate, 1)
-		chunk   = make([]int16, 480) // 10 ms from the jitter buffer
-		in      = make([]float32, 480)
-		pending []float32 // mono at the device rate
-		target  = uint32(c.format.Rate * renderTargetMs / 1000)
+		feeder = NewFeeder(s.playout, c.format)
+		target = uint32(c.format.Rate * renderTargetMs / 1000)
 	)
 	tick := time.NewTicker(pollInterval)
 	defer tick.Stop()
@@ -342,23 +347,15 @@ func (s *winSink) run(id string, ready chan<- error) {
 			continue
 		}
 		want := min(target-padding, c.frames-padding)
-		for uint32(len(pending)) < want {
-			s.playout.Read(chunk)
-			for i, v := range chunk {
-				in[i] = float32(v) / 32768
-			}
-			pending = res.Process(pending, in)
-		}
 
 		var data *byte
 		if err := arc.GetBuffer(want, &data); err != nil {
 			return
 		}
-		Encode(unsafe.Slice(data, int(want)*c.format.BlockAlign()), pending[:want], c.format)
+		feeder.Fill(unsafe.Slice(data, int(want)*c.format.BlockAlign()), int(want))
 		if err := arc.ReleaseBuffer(want, 0); err != nil {
 			return
 		}
-		pending = pending[:copy(pending, pending[want:])]
 	}
 }
 
@@ -417,13 +414,8 @@ func (s *winSource) run(id string, onFrame FrameFunc, onErr func(error), ready c
 	ready <- nil
 
 	var (
-		res    = NewResampler(c.format.Rate, 48000, 2)
-		framer = NewFramer(960 * 4)
-		raw    []float32
-		stereo []float32
-		out    []float32
-		pcm    []byte
-		align  = c.format.BlockAlign()
+		capture = NewCapturer(c.format, onFrame)
+		align   = c.format.BlockAlign()
 	)
 	fail := func(err error) {
 		if onErr != nil {
@@ -457,21 +449,16 @@ func (s *winSource) run(id string, onFrame FrameFunc, onErr func(error), ready c
 				fail(fmt.Errorf("loopback: %w", err))
 				return
 			}
-			raw = raw[:0]
-			if flags&wca.AUDCLNT_BUFFERFLAGS_SILENT != 0 {
-				raw = append(raw, make([]float32, int(frames)*c.format.Channels)...)
+			silent := flags&wca.AUDCLNT_BUFFERFLAGS_SILENT != 0
+			if silent {
+				capture.PushSilence(int(frames))
 			} else {
-				raw = Decode(raw, unsafe.Slice(data, int(frames)*align), c.format)
+				capture.Push(unsafe.Slice(data, int(frames)*align))
 			}
 			if err := acc.ReleaseBuffer(frames); err != nil {
 				fail(fmt.Errorf("loopback: %w", err))
 				return
 			}
-
-			stereo = ToStereo(stereo[:0], raw, c.format.Channels)
-			out = res.Process(out[:0], stereo)
-			pcm = FloatToS16(pcm[:0], out)
-			framer.Push(pcm, func(frame []byte) { onFrame(frame) })
 		}
 	}
 }

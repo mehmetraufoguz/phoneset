@@ -53,6 +53,9 @@ func Addrs() []string {
 
 func skipped(name string) bool {
 	n := strings.ToLower(name)
+	if strings.HasPrefix(n, "bridge") { // macOS bridge100 and friends: VM and sharing networks
+		return true
+	}
 	for _, s := range skipAdapter {
 		if strings.Contains(n, s) {
 			return true

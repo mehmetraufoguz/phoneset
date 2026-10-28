@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !(darwin && cgo)
 
 package audio
 
@@ -10,10 +10,10 @@ import (
 	"time"
 )
 
-// The development backend lets the whole program run on a machine without the
-// Windows audio stack: the "speaker" is a 440 Hz tone and the "microphone" is
-// played into a WAV file named by PHONESET_DEV_MIC_OUT (or discarded).
-// It exists for development; real macOS and Linux audio is future work.
+// The development backend lets the whole program run where there is no real
+// backend (Linux, or macOS built without cgo): the "speaker" is a 440 Hz tone and
+// the "microphone" is played into a WAV file named by PHONESET_DEV_MIC_OUT (or
+// discarded). Real audio exists for Windows (WASAPI) and macOS (CoreAudio).
 
 type devBackend struct{}
 
@@ -22,11 +22,14 @@ func NewBackend() Backend { return devBackend{} }
 func (devBackend) Name() string { return "dev (synthetic audio)" }
 
 var devPlayback = []Device{
-	{ID: "dev-speakers", Name: "Dev Speakers", Default: true},
-	{ID: "dev-cable", Name: "Dev Virtual Cable Input", Virtual: true},
+	{ID: "dev-speakers", Name: "Dev Speakers", Default: true, Mic: true, Speaker: true},
+	{ID: "dev-cable", Name: "Dev Virtual Cable Input", Virtual: true, Mic: true, Speaker: true},
 }
 
-func (devBackend) Playback() ([]Device, error) { return devPlayback, nil }
+func (devBackend) MicHint() string     { return "" }
+func (devBackend) CaptureHint() string { return "" }
+
+func (devBackend) Devices() ([]Device, error) { return devPlayback, nil }
 
 func (devBackend) ResolveMic(selector string) (Device, error) {
 	if selector == "" {

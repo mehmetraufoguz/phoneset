@@ -30,7 +30,8 @@ const usage = `phoneset - use your phone as this PC's microphone and headphones 
 
 Usage:
   phoneset [serve] [flags]   start the service and show the pairing QR code
-  phoneset audio             list playback devices and how phoneset would use them
+  phoneset audio             list audio devices and how phoneset would use them
+  phoneset test              check the headphone source (level meter) or --mic (tone)
   phoneset phones            list paired phones
   phoneset forget <name|id|all>
   phoneset version
@@ -38,10 +39,10 @@ Usage:
 Flags for serve:
   --port N              TCP port (default 47831)
   --name NAME           name shown on the phone (default: this PC's name)
-  --mic-device TEXT     playback device that carries the phone's microphone,
-                        usually a virtual cable (default: auto-detect VB-CABLE)
-  --speaker-device TEXT playback device whose audio is sent to the phone
-                        (default: the system default device)
+  --mic-device TEXT     device the phone's microphone is played into, a virtual
+                        cable (default: auto-detect VB-CABLE or BlackHole)
+  --speaker-device TEXT device whose audio is sent to the phone (default: the system
+                        default playback on Windows; system audio on macOS)
   --no-mic, --no-speaker
   --pair                open pairing even when phones are already paired
   --config-dir DIR      where pairings are stored
@@ -60,6 +61,8 @@ func main() {
 		err = cmdServe(args)
 	case "audio":
 		err = cmdAudio()
+	case "test":
+		err = cmdTest(os.Args[2:])
 	case "phones":
 		err = cmdPhones(args)
 	case "forget":
@@ -186,8 +189,8 @@ func (a *app) banner(ident store.Identity, micSel, spkSel string, noMic, noSpk b
 		fmt.Printf("  microphone         %s\n", term.Dim("off (--no-mic)"))
 	case err != nil:
 		fmt.Printf("  microphone         %s\n", term.Yellow("no virtual cable found"))
-		fmt.Println(term.Dim("                     Install VB-CABLE (vb-audio.com/Cable) so apps can pick your phone as a microphone,"))
-		fmt.Println(term.Dim("                     or name a device with --mic-device."))
+		fmt.Println(term.Dim("                     " + a.backend.MicHint()))
+		fmt.Println(term.Dim("                     Or name a device with --mic-device."))
 	default:
 		fmt.Printf("  microphone         phone → %s\n", dev.Name)
 	}
@@ -195,7 +198,7 @@ func (a *app) banner(ident store.Identity, micSel, spkSel string, noMic, noSpk b
 	case noSpk:
 		fmt.Printf("  headphones         %s\n", term.Dim("off (--no-speaker)"))
 	case err != nil:
-		fmt.Printf("  headphones         %s\n", term.Yellow("no playback device found"))
+		fmt.Printf("  headphones         %s\n", term.Yellow("nothing to capture; name a device with --speaker-device"))
 	default:
 		fmt.Printf("  headphones         %s → phone\n", dev.Name)
 	}
@@ -274,28 +277,41 @@ func pairURL(ident store.Identity, addrs []string, port int, secret []byte) stri
 func cmdAudio() error { return printAudio(audio.NewBackend()) }
 
 func printAudio(be audio.Backend) error {
-	devs, err := be.Playback()
+	devs, err := be.Devices()
 	if err != nil {
 		return err
 	}
-	fmt.Println(term.Bold("Playback devices") + term.Dim("  ("+be.Name()+")"))
+	fmt.Println(term.Bold("Audio devices") + term.Dim("  ("+be.Name()+")"))
 	if len(devs) == 0 {
 		fmt.Println("  none found")
 	}
-	for _, d := range devs {
-		var tags []string
-		if d.Default {
-			tags = append(tags, "system default → headphone source")
+
+	micDev, micErr := be.ResolveMic("")
+	spkDev, spkErr := be.ResolveSpeaker("")
+	section := func(title string, has func(audio.Device) bool, auto audio.Device, autoErr error) {
+		fmt.Println("\n  " + title)
+		for _, d := range devs {
+			if !has(d) {
+				continue
+			}
+			var tags []string
+			if autoErr == nil && d.ID == auto.ID {
+				tags = append(tags, "chosen automatically")
+			}
+			if d.Virtual {
+				tags = append(tags, "virtual")
+			}
+			mark := " "
+			if autoErr == nil && d.ID == auto.ID {
+				mark = "*"
+			}
+			fmt.Printf("    %s %s  %s\n", mark, d.Name, term.Dim(strings.Join(tags, ", ")))
 		}
-		if d.Virtual {
-			tags = append(tags, "virtual cable → microphone")
-		}
-		mark := " "
-		if d.Default {
-			mark = "*"
-		}
-		fmt.Printf("  %s %s  %s\n", mark, d.Name, term.Dim(strings.Join(tags, ", ")))
 	}
+	section("The phone's microphone is played into (apps record from the other end):",
+		func(d audio.Device) bool { return d.Mic }, micDev, micErr)
+	section("Sent to the phone's headphones:",
+		func(d audio.Device) bool { return d.Speaker }, spkDev, spkErr)
 	fmt.Println(term.Dim("\n  Use --mic-device / --speaker-device with part of a name to override."))
 	return nil
 }
