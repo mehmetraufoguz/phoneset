@@ -1,5 +1,7 @@
 # phoneset
 
+[![skills.sh](https://skills.sh/b/mehmetraufoguz/phoneset)](https://skills.sh/mehmetraufoguz/phoneset)
+
 Use your phone as your PC's **microphone** and **headphones** over Wi-Fi.
 
 ```
@@ -11,7 +13,8 @@ Use your phone as your PC's **microphone** and **headphones** over Wi-Fi.
 | ------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `pc/`              | The PC side. A Go program you run in a terminal, no window. Windows and macOS.                               |
 | `mobile/`          | The phone app. Expo (SwiftUI on iOS, Jetpack Compose on Android through Expo UI), logic written with Effect. |
-| `scripts/`         | `install-mac.sh` (one-line macOS install) and `icons.py` (draws the icon for phone and PC).                  |
+| `scripts/`         | `install-mac.sh` and `install-windows.ps1` (one-line installs) and `icons.py` (draws the icon).              |
+| `skills/`          | An agent skill: how to install, use and troubleshoot phoneset (`npx skills add mehmetraufoguz/phoneset`).    |
 | `docs/protocol.md` | The wire protocol and its security model.                                                                    |
 
 ## Using it
@@ -20,7 +23,22 @@ Use your phone as your PC's **microphone** and **headphones** over Wi-Fi.
 
 #### Windows 10/11
 
-Get `phoneset.exe` from the CI artifacts (the **ci** workflow, `phoneset-windows`) or build it:
+One line in PowerShell (no administrator rights; downloads the latest release, puts `phoneset.exe` in
+`%LOCALAPPDATA%\phoneset\bin` and adds that folder to your user `PATH`):
+
+```powershell
+irm https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-windows.ps1 | iex
+```
+
+With options (`-Start` runs it in the background now, `-Autostart` starts it at every login, `-WithVBCable`
+also installs the virtual microphone through winget, `-Version v0.2.0` picks a release):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-windows.ps1))) -Start -Autostart -WithVBCable
+```
+
+Releases appear when a version tag is pushed (`git tag v0.2.0 && git push origin v0.2.0`). You can also
+take `phoneset.exe` from the CI artifacts (the **ci** workflow, `phoneset-windows`) or build it:
 
 ```sh
 pnpm pc:build:windows        # from a Mac/Linux box
@@ -68,17 +86,14 @@ Pairings are stored in `%AppData%\phoneset\`.
 
 #### macOS (12 or later)
 
-One line (downloads the latest release, installs `phoneset` to `~/.local/bin`, adds it to your
-`PATH`; the repository is private, so this goes through the GitHub CLI: `brew install gh && gh auth login`):
+One line (downloads the latest release, installs `phoneset` to `~/.local/bin`, adds it to your `PATH`):
 
 ```sh
-gh api repos/mehmetraufoguz/phoneset/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh -s -- --start
+curl -fsSL https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-mac.sh | sh -s -- --start
 ```
 
-Add `--autostart` to also start it at every login and `--with-blackhole` to install the virtual
-microphone with Homebrew (once the repository is public, `curl -fsSL
-https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-mac.sh | sh` works too).
-Releases appear when a version tag is pushed (`git tag v0.2.0 && git push origin v0.2.0`).
+`--start` runs it in the background right away, `--autostart` also starts it at every login and
+`--with-blackhole` installs the virtual microphone with Homebrew. Without options it only installs.
 
 Or build it on the Mac (macOS audio needs cgo, so the Xcode command line tools must be
 installed), or take `phoneset-macos-arm64` / `phoneset-macos-amd64` from the CI artifacts
@@ -131,19 +146,44 @@ phoneset pair                QR code and code for the running service (--browser
 phoneset stop
 phoneset logs                where the log is, and its last lines
 phoneset autostart enable    start it in the background at every login (disable, status)
+phoneset update              install the newest release (--check only looks)
 ```
 
 The first `phoneset daemon` with no paired phone opens a pairing page in your browser: a page
 served by phoneset itself, reachable only from this PC, with the QR code and the code. The
 tray icon is the app's icon, with a green dot while a phone is connected. Its menu shows who
 is connected and what streams, and has **Pair a phone…**, **Disconnect phone**, **Paired
-phones** (forget one), **Start at login**, **Open log** and **Quit**.
+phones** (forget one), **Start at login**, **Check for updates**, **Open log** and **Quit**.
 
 Starting at login is opt-in. On Windows it adds a per-user entry under
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; on macOS it installs a LaunchAgent
 (`~/Library/LaunchAgents/dev.mehmetraufoguz.phoneset.plist`) that launchd restarts after a crash
 but not after a clean quit. `phoneset autostart disable` (or the tray menu) removes it. The log
 is `phoneset.log` next to the pairings. Only one instance runs per config directory.
+
+### Updating
+
+```
+phoneset update --check      is there a newer release? (compares commits, not version numbers)
+phoneset update              download it, check it against the release's SHA256SUMS, replace the binary
+```
+
+Every build knows the commit it was made from (`phoneset version` prints it). `update` asks GitHub
+whether the latest release's commit is ahead of yours; if so it downloads the archive for your system, runs
+the new binary once to be sure it works, replaces the old one and restarts the background service with the
+same flags. A copy running in a terminal is left alone: restart it yourself. The tray menu has the same
+thing (**Check for updates**, then **Install update …**). Nothing checks by itself: the only requests go out
+when you ask. For a private fork set `GITHUB_TOKEN`, or sign in with `gh auth login`. Updating the PC side
+doesn't touch the phone app.
+
+### For AI agents
+
+The repository carries a [skill](skills/phoneset/SKILL.md) (install, commands, how it works,
+troubleshooting) that coding agents can load:
+
+```sh
+npx skills add mehmetraufoguz/phoneset
+```
 
 ### 2. On the phone
 
@@ -174,6 +214,12 @@ phone shows it outside the app too, so you can see it is working:
   extension shares an App Group with the app, and that group has to be registered once in your Apple
   Developer account (Certificates, Identifiers & Profiles > Identifiers > App Groups:
   `group.dev.mehmetraufoguz.phoneset`). Then build with `PHONESET_LIVE_ACTIVITY=1 pnpm mobile:ios`.
+
+**Echo.** With the phone's speaker playing the PC's audio, its microphone hears it and sends it back. Earphones
+solve that for good. On iPhone the session screen has **Echo cancellation** under **Sound**: it puts the phone in
+its voice-call audio mode and switches on voice processing for the microphone (the audio library doesn't do
+that by itself, so the repository patches it: `patches/react-native-audio-api@0.13.6.patch`). The PC's audio may
+sound different while it is on. It is not available on Android yet.
 
 If the phone can't find the PC: both must be on the same Wi-Fi (guest networks and
 "client isolation" block it), and the PC's firewall must allow phoneset on private networks.
@@ -225,7 +271,8 @@ Tests are deliberately not committed to this repository.
 ## Status
 
 Verified on real hardware: **Windows** (WASAPI) in both directions with an iPhone 13 Pro, the
-microphone through VB-CABLE and the headphones through loopback. Also verified: the protocol end
+microphone through VB-CABLE and the headphones through loopback, plus the background daemon and the
+tray icon. Also verified: the protocol end
 to end (pairing by code and by QR, rate limiting, token reconnects, encrypted streaming both ways)
 between the real phone-side code and the real Go server; on macOS the CoreAudio backend (real
 devices, an output device fed for seconds without an underrun, a full session against the
@@ -234,14 +281,19 @@ token and Host checks, the LaunchAgent enable/disable cycle) and the installer.
 
 Not yet exercised:
 
-- on Windows, the daemon, the tray, start at login and the executable's icon (they compile and pass
-  `go vet` on a Windows runner but have not run);
+- on Windows, start at login and the executable's icon in Explorer (they build in CI and the icon's
+  resource tree checks out, but nobody has looked at them on a real machine yet);
 - on macOS, **the audio content of the system-audio tap** (macOS delivers silence until the
   permission above is granted; use `phoneset test` to check), the BlackHole microphone path,
   capturing an input device, Intel Macs and macOS before 14.2, and the menu bar icon (the process
   runs the tray without errors, but there was no way to look at the menu bar);
 - the Live Activity (needs the App Group above, so it has not been built), the Android notification
-  and build, and background operation.
+  and build, and background operation;
+- iPhone echo cancellation (the change builds, but nobody has listened to it yet);
+- `phoneset update` against a real release (it passed against a stand-in for the GitHub API: version
+  and commit stamping, the commit comparison, the checksum, restarting a background service with its flags;
+  the Windows replace-the-running-exe step and the tray item have not been run), and the Windows installer
+  script (it parses in CI, but has not been run on a Windows machine).
 
 Expect to tune the jitter buffer (`audio.NewPlayout`, 60 ms target) on your Wi-Fi.
 
