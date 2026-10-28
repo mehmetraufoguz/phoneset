@@ -2,12 +2,11 @@
 # Installs phoneset on macOS: downloads the latest release, puts `phoneset` in
 # ~/.local/bin and puts that folder on your PATH.
 #
-#   gh api repos/mehmetraufoguz/phoneset/contents/scripts/install-mac.sh \
-#     -H "Accept: application/vnd.github.raw" | sh
-#
-# Once the repository is public, plain curl works too:
-#
 #   curl -fsSL https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-mac.sh | sh
+#
+# While the repository is private that URL answers 404; the same script runs through the GitHub CLI:
+#
+#   gh api repos/mehmetraufoguz/phoneset/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh
 #
 # Options go after `sh -s --`, e.g. `... | sh -s -- --start --autostart`:
 #   --start            start phoneset in the background now
@@ -34,7 +33,7 @@ while [ $# -gt 0 ]; do
 	--with-blackhole) BLACKHOLE=1 ;;
 	--no-modify-path) MODIFY_PATH=0 ;;
 	--version) shift; [ $# -gt 0 ] || die "--version needs a value"; VERSION="$1" ;;
-	-h | --help) sed -n '2,24p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h | --help) sed -n '2,26p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) die "unknown option: $1" ;;
 	esac
 	shift
