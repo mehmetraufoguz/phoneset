@@ -14,7 +14,9 @@ require (
 )
 
 require (
+	fyne.io/systray v1.12.2 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/miekg/dns v1.1.27 // indirect
 	golang.org/x/net v0.60.0 // indirect
 )
