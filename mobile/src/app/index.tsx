@@ -1,5 +1,5 @@
 import { Button, Column, FieldGroup, Host, Row, Spacer, Text } from "@expo/ui"
-import { useFocusEffect, useRouter } from "expo-router"
+import { Stack, useFocusEffect, useRouter } from "expo-router"
 import { useCallback, useState } from "react"
 import { Alert } from "react-native"
 import { Session } from "../core/session"
@@ -36,35 +36,36 @@ export default function Home() {
     ])
 
   return (
-    <Host style={{ flex: 1 }} seedColor={BRAND}>
-      <FieldGroup>
-        <FieldGroup.Section title="Your PCs">
-          {pcs.length === 0 ? (
-            <Text textStyle={{ color: colors.secondary }}>
-              No PC yet. Start phoneset on your Windows PC, then pair it below.
-            </Text>
-          ) : (
-            pcs.map((pc) => (
-              <Row key={pc.id} alignment="center" spacing={8}>
-                <Button variant="text" onPress={() => connect(pc)}>
-                  <Column spacing={2}>
-                    <Text textStyle={{ fontSize: 17, fontWeight: "600" }}>{pc.name}</Text>
-                    <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
-                      {visible.has(pc.id) ? "On this Wi-Fi · tap to connect" : "Tap to connect"}
-                    </Text>
-                  </Column>
-                </Button>
-                <Spacer flexible />
-                <Button variant="text" label="Forget" onPress={() => forget(pc)} />
-              </Row>
-            ))
-          )}
-        </FieldGroup.Section>
-
-        <FieldGroup.Section>
-          <Button label="Pair a PC" onPress={() => router.push("/pair")} />
-        </FieldGroup.Section>
-      </FieldGroup>
-    </Host>
+    <>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button icon="plus" onPress={() => router.push("/pair")} />
+      </Stack.Toolbar>
+      <Host style={{ flex: 1 }} seedColor={BRAND}>
+        <FieldGroup>
+          <FieldGroup.Section title="Your PCs">
+            {pcs.length === 0 ? (
+              <Text textStyle={{ color: colors.secondary }}>
+                No PC yet. Start phoneset on your PC, then tap + to pair it.
+              </Text>
+            ) : (
+              pcs.map((pc) => (
+                <Row key={pc.id} alignment="center" spacing={8}>
+                  <Button variant="text" onPress={() => connect(pc)}>
+                    <Column spacing={2}>
+                      <Text textStyle={{ fontSize: 17, fontWeight: "600" }}>{pc.name}</Text>
+                      <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
+                        {visible.has(pc.id) ? "On this Wi-Fi · tap to connect" : "Tap to connect"}
+                      </Text>
+                    </Column>
+                  </Button>
+                  <Spacer flexible />
+                  <Button variant="text" label="Forget" onPress={() => forget(pc)} />
+                </Row>
+              ))
+            )}
+          </FieldGroup.Section>
+        </FieldGroup>
+      </Host>
+    </>
   )
 }
