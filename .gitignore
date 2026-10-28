@@ -1,0 +1,27 @@
+# dependencies and build output
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+expo-env.d.ts
+pc/bin/
+*.exe
+
+# generated native projects (Expo prebuild)
+mobile/ios/
+mobile/android/
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Tests are deliberately not committed to this repository.
+*_test.go
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/

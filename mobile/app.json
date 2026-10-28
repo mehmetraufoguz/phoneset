@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "phoneset",
+    "slug": "phoneset",
+    "scheme": "phoneset",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "dev.mehmetraufoguz.phoneset",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "phoneset connects to your PC over your Wi-Fi network.",
+        "NSBonjourServices": ["_phoneset._tcp"],
+        "NSAppTransportSecurity": { "NSAllowsLocalNetworking": true }
+      }
+    },
+    "android": {
+      "package": "dev.mehmetraufoguz.phoneset",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#3B6BFF"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+        "android.permission.NEARBY_WIFI_DEVICES"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "phoneset uses the camera to scan the pairing QR code shown on your PC.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "react-native-audio-api",
+        {
+          "iosBackgroundMode": true,
+          "iosMicrophonePermission": "phoneset sends your voice to your PC while the microphone is switched on.",
+          "androidPermissions": [
+            "android.permission.RECORD_AUDIO",
+            "android.permission.MODIFY_AUDIO_SETTINGS",
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+            "android.permission.POST_NOTIFICATIONS"
+          ],
+          "androidForegroundService": true,
+          "androidFSTypes": ["microphone"],
+          "androidFSStopWithTask": true,
+          "disableFFmpeg": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": { "usesCleartextTraffic": true }
+        }
+      ]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}

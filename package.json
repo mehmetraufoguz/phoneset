@@ -1,0 +1,21 @@
+{
+  "name": "phoneset",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Use your phone as your PC's microphone and headphones over Wi-Fi.",
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "check": "biome check .",
+    "fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "pnpm --filter mobile typecheck",
+    "mobile": "pnpm --filter mobile start",
+    "mobile:ios": "pnpm --filter mobile ios",
+    "mobile:android": "pnpm --filter mobile android",
+    "pc:build": "cd pc && go build -trimpath -ldflags \"-s -w\" -o bin/ ./cmd/phoneset",
+    "pc:build:windows": "cd pc && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags \"-s -w\" -o bin/phoneset.exe ./cmd/phoneset"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3"
+  }
+}
