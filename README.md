@@ -31,14 +31,14 @@ irm https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/insta
 ```
 
 With options (`-Start` runs it in the background now, `-Autostart` starts it at every login, `-WithVBCable`
-also installs the virtual microphone through winget, `-Version v0.2.0` picks a release):
+also installs the virtual microphone through winget, `-Version v0.1.0` picks a release):
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-windows.ps1))) -Start -Autostart -WithVBCable
 ```
 
-Releases appear when a version tag is pushed (`git tag v0.2.0 && git push origin v0.2.0`). You can also
-take `phoneset.exe` from the CI artifacts (the **ci** workflow, `phoneset-windows`) or build it:
+You can also download `phoneset-windows-amd64.zip` (or `-arm64`) from the
+[latest release](https://github.com/mehmetraufoguz/phoneset/releases/latest) and unpack `phoneset.exe`, or build it:
 
 ```sh
 pnpm pc:build:windows        # from a Mac/Linux box
@@ -96,8 +96,9 @@ curl -fsSL https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/script
 `--with-blackhole` installs the virtual microphone with Homebrew. Without options it only installs.
 
 Or build it on the Mac (macOS audio needs cgo, so the Xcode command line tools must be
-installed), or take `phoneset-macos-arm64` / `phoneset-macos-amd64` from the CI artifacts
-(`chmod +x phoneset` and `xattr -d com.apple.quarantine phoneset` for a downloaded one):
+installed), or unpack `phoneset-macos-arm64.tar.gz` / `phoneset-macos-amd64.tar.gz` from the
+[latest release](https://github.com/mehmetraufoguz/phoneset/releases/latest)
+(`xattr -d com.apple.quarantine phoneset` if a browser downloaded it):
 
 ```sh
 pnpm pc:build        # writes pc/bin/phoneset
@@ -267,6 +268,10 @@ On a Mac, `go vet ./...` covers the CoreAudio backend; the Windows one is checke
 second command.
 
 Tests are deliberately not committed to this repository.
+
+To publish a release, push a version tag: `git tag -a v0.2.0 -m "phoneset 0.2.0" && git push origin v0.2.0`. The
+**release** workflow builds the four archives (each with the license), writes `SHA256SUMS`, and publishes them;
+then edit the release notes by hand.
 
 ## Status
 
