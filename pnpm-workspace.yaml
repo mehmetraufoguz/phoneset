@@ -19,5 +19,9 @@ minimumReleaseAgeExclude:
   - expo-router@58.0.27
   - expo@58.0.20
   - expo-widgets@58.0.24
+  - '@expo/config-plugins@58.0.11'
+  - '@expo/image-utils@0.12.6'
+  - '@expo/require-utils@58.0.5'
+  - expo-splash-screen@58.0.12
 patchedDependencies:
   react-native-audio-api@0.13.6: patches/react-native-audio-api@0.13.6.patch
