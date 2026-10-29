@@ -290,6 +290,10 @@ installer ran against them on an Apple silicon Mac, and a real `phoneset update`
 too, with a background service that came back with its flags. The Windows one-line installer was run on a real
 Windows PC, and a phone was paired by scanning the QR code with its own camera app. On that PC the tray icon,
 the executable's icon in Explorer and start at login were checked too.
+Protocol v2 (0.2.0) on that Windows PC: `phoneset update` replaced the running exe, and the microphone and
+headphones then ran for 40 to 50 minutes without a problem. An iPhone 13 Pro paired with a v2 agent through the
+native crypto module and streamed, and an Android 16 emulator paired and exchanged pings. The iPhone's echo
+cancellation switch was tried against that Windows PC too, and no problem was reported.
 
 Not yet exercised:
 
@@ -297,11 +301,10 @@ Not yet exercised:
   permission above is granted; use `phoneset test` to check), the BlackHole microphone path,
   capturing an input device, Intel Macs and macOS before 14.2, and the menu bar icon (the process
   runs the tray without errors, but there was no way to look at the menu bar);
-- the Live Activity (needs the App Group above, so it has not been built), the Android notification
-  and build, and background operation;
-- iPhone echo cancellation (the change builds, but nobody has listened to it yet);
-- the Windows side of `phoneset update` (replacing the running exe) and the tray's update item, and the
-  Windows ARM and Intel Mac builds beyond what CI compiles.
+- the Live Activity (needs the App Group above, so it has not been built), the Android notification,
+  audio on Android (the Android build runs on an emulator and pairs, but its session screen shows only its
+  first section, so the stream switches are missing), and background operation;
+- the tray's update item, and the Windows ARM and Intel Mac builds beyond what CI compiles.
 
 Expect to tune the jitter buffer (`audio.NewPlayout`, 60 ms target) on your Wi-Fi.
 
