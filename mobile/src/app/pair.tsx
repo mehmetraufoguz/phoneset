@@ -64,7 +64,7 @@ export default function Pair() {
   useEffect(() => {
     if (!k || handled.current === k) return
     handled.current = k
-    const link = `phoneset://pair?v=1&id=${enc(id)}&n=${enc(n)}&h=${enc(h)}&p=${enc(p)}&k=${enc(k)}`
+    const link = `phoneset://pair?v=2&id=${enc(id)}&n=${enc(n)}&h=${enc(h)}&p=${enc(p)}&k=${enc(k)}`
     runtime
       .runPromise(parsePairLink(link))
       .then((parsed) =>

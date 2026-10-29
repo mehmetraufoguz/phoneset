@@ -3,7 +3,7 @@ import { fromBase64 } from "./bytes"
 import { DEFAULT_PORT } from "./constants"
 import { PairLinkError } from "./errors"
 
-/** What the PC's QR code carries: phoneset://pair?v=1&id=..&n=..&h=ip,ip&p=port&k=secret */
+/** What the PC's QR code carries: phoneset://pair?v=2&id=..&n=..&h=ip,ip&p=port&k=secret */
 export interface PairLink {
   readonly id: string
   readonly name: string

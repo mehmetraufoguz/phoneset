@@ -1,40 +1,51 @@
-import { chacha20poly1305 } from "@noble/ciphers/chacha.js"
-import { x25519 } from "@noble/curves/ed25519.js"
-import { hkdf } from "@noble/hashes/hkdf.js"
-import { hmac } from "@noble/hashes/hmac.js"
-import { sha256 } from "@noble/hashes/sha2.js"
+import { Context } from "effect"
 import { concat, utf8 } from "./bytes"
 
-// Pure functions mirroring pc/internal/secure. The only effect (randomness) is
-// supplied by the caller through the Entropy service.
+// The protocol's cryptography (docs/protocol.md), mirroring pc/internal/secure. Every primitive
+// comes from the phone's operating system (CryptoKit on iOS, the Java cryptography architecture
+// on Android) through the Crypto service, so the app carries no cryptography of its own.
 
 export interface KeyPair {
+  /** 32 bytes. */
   readonly secret: Uint8Array
+  /** 65 bytes: an uncompressed P-256 point, 0x04 || X || Y. */
   readonly public: Uint8Array
 }
 
-export const keyPairFromSeed = (seed: Uint8Array): KeyPair => ({
-  secret: seed,
-  public: x25519.getPublicKey(seed)
-})
+export interface Primitives {
+  /** A fresh P-256 key pair. */
+  readonly generateKeyPair: () => KeyPair
+  /** ECDH: the 32-byte x coordinate of the shared point. Throws on a key that is not on the curve. */
+  readonly sharedSecret: (secret: Uint8Array, peerPublic: Uint8Array) => Uint8Array
+  /** HKDF-SHA-256. */
+  readonly hkdf: (ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, length: number) => Uint8Array
+  /** HMAC-SHA-256. */
+  readonly hmac: (key: Uint8Array, data: Uint8Array) => Uint8Array
+  readonly sha256: (data: Uint8Array) => Uint8Array
+  /** AES-256-GCM with a 12-byte nonce: ciphertext followed by the 16-byte tag. */
+  readonly seal: (
+    key: Uint8Array,
+    nonce: Uint8Array,
+    aad: Uint8Array,
+    plaintext: Uint8Array
+  ) => Uint8Array
+  /** Throws if the message does not authenticate. */
+  readonly open: (
+    key: Uint8Array,
+    nonce: Uint8Array,
+    aad: Uint8Array,
+    sealed: Uint8Array
+  ) => Uint8Array
+}
 
-export const sharedSecret = (secret: Uint8Array, peerPublic: Uint8Array): Uint8Array =>
-  x25519.getSharedSecret(secret, peerPublic)
-
-/** Binds every proof to this handshake so none can be replayed on another. */
-export const transcriptOf = (clientPublic: Uint8Array, serverPublic: Uint8Array): Uint8Array =>
-  sha256(concat(utf8("phoneset/v1"), clientPublic, serverPublic))
+/** The platform's cryptography. Provided by the platform. */
+export class Crypto extends Context.Service<Crypto, Primitives>()("phoneset/Crypto") {}
 
 export interface SessionKeys {
   /** Client to server. */
   readonly send: Uint8Array
   /** Server to client. */
   readonly receive: Uint8Array
-}
-
-export const deriveKeys = (shared: Uint8Array, transcript: Uint8Array): SessionKeys => {
-  const okm = hkdf(sha256, shared, transcript, utf8("phoneset/v1/keys"), 64)
-  return { send: okm.slice(0, 32), receive: okm.slice(32, 64) }
 }
 
 /** 4 zero bytes then the counter as a big-endian u64, as on the PC. */
@@ -46,30 +57,34 @@ const nonce = (counter: number): Uint8Array => {
   return n
 }
 
-export const seal = (
-  key: Uint8Array,
-  counter: number,
-  aad: Uint8Array,
-  plaintext: Uint8Array
-): Uint8Array => chacha20poly1305(key, nonce(counter), aad).encrypt(plaintext)
+/** The protocol's operations, built on a set of primitives. */
+export const protocolOf = (p: Primitives) => ({
+  /** Binds every proof to this handshake so none can be replayed on another. */
+  transcriptOf: (clientPublic: Uint8Array, serverPublic: Uint8Array): Uint8Array =>
+    p.sha256(concat(utf8("phoneset/v2"), clientPublic, serverPublic)),
 
-/** Throws if the message does not authenticate. */
-export const open = (
-  key: Uint8Array,
-  counter: number,
-  aad: Uint8Array,
-  ciphertext: Uint8Array
-): Uint8Array => chacha20poly1305(key, nonce(counter), aad).decrypt(ciphertext)
+  deriveKeys: (shared: Uint8Array, transcript: Uint8Array): SessionKeys => {
+    const okm = p.hkdf(shared, transcript, utf8("phoneset/v2/keys"), 64)
+    return { send: okm.slice(0, 32), receive: okm.slice(32, 64) }
+  },
 
-export const proof = (
-  key: Uint8Array,
-  label: string,
-  transcript: Uint8Array,
-  ...parts: ReadonlyArray<Uint8Array>
-): Uint8Array => hmac(sha256, key, concat(utf8(label), transcript, ...parts))
+  seal: (key: Uint8Array, counter: number, aad: Uint8Array, plaintext: Uint8Array): Uint8Array =>
+    p.seal(key, nonce(counter), aad, plaintext),
 
-/** Key used for the 6-digit code path of pairing. */
-export const codeKey = (code: string): Uint8Array => sha256(utf8(`phoneset/code/${code}`))
+  /** Throws if the message does not authenticate. */
+  open: (key: Uint8Array, counter: number, aad: Uint8Array, ciphertext: Uint8Array): Uint8Array =>
+    p.open(key, nonce(counter), aad, ciphertext),
+
+  proof: (
+    key: Uint8Array,
+    label: string,
+    transcript: Uint8Array,
+    ...parts: ReadonlyArray<Uint8Array>
+  ): Uint8Array => p.hmac(key, concat(utf8(label), transcript, ...parts)),
+
+  /** Key used for the 6-digit code path of pairing. */
+  codeKey: (code: string): Uint8Array => p.sha256(utf8(`phoneset/code/${code}`))
+})
 
 export const equal = (a: Uint8Array, b: Uint8Array): boolean => {
   if (a.length !== b.length) return false

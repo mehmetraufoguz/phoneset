@@ -1,8 +1,7 @@
 import { Effect, type Scope } from "effect"
 import { concat } from "./bytes"
 import { PROTOCOL_VERSION } from "./constants"
-import { deriveKeys, keyPairFromSeed, open, seal, sharedSecret, transcriptOf } from "./crypto"
-import { Entropy } from "./entropy"
+import { Crypto, protocolOf } from "./crypto"
 import { ProtocolError, type TransportError } from "./errors"
 import { SocketFactory } from "./socket"
 
@@ -22,22 +21,32 @@ export interface Message {
   readonly body: Uint8Array
 }
 
-/** Opens the socket and runs the X25519 handshake. Closing the scope closes the socket. */
+/** Opens the socket and runs the P-256 handshake. Closing the scope closes the socket. */
 export const openChannel = Effect.fn("Channel.open")(function* (url: string) {
   const sockets = yield* SocketFactory
-  const entropy = yield* Entropy
+  const crypto = yield* Crypto
+  const { transcriptOf, deriveKeys, seal, open } = protocolOf(crypto)
 
   const socket = yield* sockets.connect(url)
 
-  const me = keyPairFromSeed(entropy.bytes(32))
+  const me = crypto.generateKeyPair()
   yield* socket.send(concat(Uint8Array.of(PROTOCOL_VERSION), me.public))
 
   const serverPublic = yield* socket.receive
-  if (serverPublic.length !== 32) {
+  if (serverPublic.length !== 65) {
     return yield* new ProtocolError({ message: "The PC sent a malformed handshake." })
   }
-  const transcript = transcriptOf(me.public, serverPublic)
-  const keys = deriveKeys(sharedSecret(me.secret, serverPublic), transcript)
+  // sharedSecret throws for a key that is not a point on the curve.
+  const { transcript, keys } = yield* Effect.try({
+    try: () => {
+      const transcript = transcriptOf(me.public, serverPublic)
+      return {
+        transcript,
+        keys: deriveKeys(crypto.sharedSecret(me.secret, serverPublic), transcript)
+      }
+    },
+    catch: () => new ProtocolError({ message: "The PC sent a malformed handshake." })
+  })
 
   // Counters are the nonces. The socket is ordered and reliable, so both sides
   // stay in step without sending them.
@@ -64,4 +73,4 @@ export const openChannel = Effect.fn("Channel.open")(function* (url: string) {
   return channel
 }) satisfies (
   url: string
-) => Effect.Effect<Channel, TransportError | ProtocolError, SocketFactory | Entropy | Scope.Scope>
+) => Effect.Effect<Channel, TransportError | ProtocolError, SocketFactory | Crypto | Scope.Scope>

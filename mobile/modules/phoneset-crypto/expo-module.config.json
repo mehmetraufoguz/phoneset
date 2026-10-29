@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PhonesetCryptoModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.phonesetcrypto.PhonesetCryptoModule"]
+  }
+}

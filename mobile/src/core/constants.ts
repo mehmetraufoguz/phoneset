@@ -1,9 +1,9 @@
 // Wire constants. Keep in sync with pc/internal/proto and docs/protocol.md.
 
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 export const DEFAULT_PORT = 47831
-export const WS_PATH = "/v1/ws"
-export const INFO_PATH = "/v1/info"
+export const WS_PATH = "/v2/ws"
+export const INFO_PATH = "/v2/info"
 
 /** mDNS service advertised by the PC: _phoneset._tcp.local. */
 export const MDNS = { type: "phoneset", protocol: "tcp", domain: "local." } as const

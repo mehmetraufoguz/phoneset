@@ -13,9 +13,8 @@ import { AudioIO, type Player } from "./audio"
 import { fromBase64, toBase64, u32be, utf8 } from "./bytes"
 import { type Channel, openChannel } from "./channel"
 import { AUDIO_HEADER_LEN, Frame, WS_PATH } from "./constants"
-import { codeKey, equal, proof } from "./crypto"
+import { Crypto, equal, protocolOf } from "./crypto"
 import { Discovery, firstReachable } from "./discovery"
-import { Entropy } from "./entropy"
 import {
   type AudioError,
   AuthError,
@@ -122,7 +121,8 @@ function makeSession() {
     const audio = yield* AudioIO
     const discovery = yield* Discovery
     const sockets = yield* SocketFactory
-    const entropy = yield* Entropy
+    const crypto = yield* Crypto
+    const { codeKey, proof } = protocolOf(crypto)
 
     const state = yield* SubscriptionRef.make<SessionState>(idle)
     const commands = yield* Queue.unbounded<StreamRequest>()
@@ -478,7 +478,7 @@ function makeSession() {
           yield* connecting(target, "Connecting securely")
           const channel = yield* openChannel(`ws://${route.host}:${route.port}${WS_PATH}`).pipe(
             Effect.provideService(SocketFactory, sockets),
-            Effect.provideService(Entropy, entropy)
+            Effect.provideService(Crypto, crypto)
           )
           yield* Effect.addFinalizer(() => sendControl(channel, { t: "bye" }).pipe(Effect.ignore))
 
