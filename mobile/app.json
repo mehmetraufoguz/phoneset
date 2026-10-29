@@ -13,6 +13,7 @@
       "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "phoneset connects to your PC over your Wi-Fi network.",
         "NSBonjourServices": ["_phoneset._tcp"],
         "NSAppTransportSecurity": {
