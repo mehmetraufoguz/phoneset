@@ -12,7 +12,11 @@ import (
 )
 
 // Label identifies the LaunchAgent. Tests and tooling can override it.
-var Label = "dev.mehmetraufoguz.phoneset"
+var Label = "com.rapp.phoneset"
+
+// legacyLabel is what 0.1.0 used (a variable so tooling can point it elsewhere). A LaunchAgent under it still counts as "start at login", and
+// enabling or disabling replaces it, so nobody ends up with two.
+var legacyLabel = "dev.mehmetraufoguz.phoneset"
 
 type macAutostart struct{}
 
@@ -20,12 +24,33 @@ type macAutostart struct{}
 // service at login. launchd restarts it if it crashes, but not after a clean quit.
 func NewAutostart() Autostart { return macAutostart{} }
 
-func plistPath() (string, error) {
+func plistPathFor(label string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "Library", "LaunchAgents", Label+".plist"), nil
+	return filepath.Join(home, "Library", "LaunchAgents", label+".plist"), nil
+}
+
+func plistPath() (string, error) { return plistPathFor(Label) }
+
+// removeLegacy unloads and deletes a LaunchAgent made under the old label, if there is one.
+func removeLegacy() error {
+	if legacyLabel == Label {
+		return nil
+	}
+	p, err := plistPathFor(legacyLabel)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(p); err != nil {
+		return nil
+	}
+	_ = exec.Command("launchctl", "bootout", domain()+"/"+legacyLabel).Run()
+	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func domain() string { return "gui/" + strconv.Itoa(os.Getuid()) }
@@ -35,8 +60,17 @@ func (macAutostart) Enabled() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, err = os.Stat(p)
-	return err == nil, nil
+	if _, err := os.Stat(p); err == nil {
+		return true, nil
+	}
+	if legacyLabel != Label {
+		if old, err := plistPathFor(legacyLabel); err == nil {
+			if _, err := os.Stat(old); err == nil {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // PlistFor renders the LaunchAgent for an executable and a log path.
@@ -85,6 +119,9 @@ func (macAutostart) Enable(exe string) error {
 	if err := os.WriteFile(p, []byte(PlistFor(exe, logPath)), 0o644); err != nil {
 		return err
 	}
+	if err := removeLegacy(); err != nil {
+		return err
+	}
 	// Replace a loaded copy, then load ours. bootout fails when nothing is loaded; that is fine.
 	_ = exec.Command("launchctl", "bootout", domain()+"/"+Label).Run()
 	if out, err := exec.Command("launchctl", "bootstrap", domain(), p).CombinedOutput(); err != nil {
@@ -102,5 +139,5 @@ func (macAutostart) Disable() error {
 	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return nil
+	return removeLegacy()
 }
