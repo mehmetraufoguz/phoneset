@@ -4,7 +4,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config"
 // connection) is added here, and only on request, because it needs a widget extension that
 // shares an App Group with the app, and an App Group has to be registered once in the Apple
 // Developer account first (Certificates, Identifiers & Profiles > Identifiers > App Groups,
-// group.dev.mehmetraufoguz.phoneset). Without it, signing fails.
+// group.com.rapp.phoneset). Without it, signing fails.
 //
 //   PHONESET_LIVE_ACTIVITY=1 pnpm mobile:ios
 const liveActivity = process.env.PHONESET_LIVE_ACTIVITY === "1"
@@ -27,8 +27,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           [
             "expo-widgets",
             {
-              bundleIdentifier: "dev.mehmetraufoguz.phoneset.widgets",
-              groupIdentifier: "group.dev.mehmetraufoguz.phoneset"
+              bundleIdentifier: "com.rapp.phoneset.widgets",
+              groupIdentifier: "group.com.rapp.phoneset"
             }
           ]
         ] satisfies ExpoConfig["plugins"])

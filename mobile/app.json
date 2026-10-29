@@ -8,7 +8,7 @@
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "ios": {
-      "bundleIdentifier": "dev.mehmetraufoguz.phoneset",
+      "bundleIdentifier": "com.rapp.phoneset",
       "supportsTablet": false,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "phoneset connects to your PC over your Wi-Fi network.",
@@ -19,7 +19,7 @@
       }
     },
     "android": {
-      "package": "dev.mehmetraufoguz.phoneset",
+      "package": "com.rapp.phoneset",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#3B6BFF"
