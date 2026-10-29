@@ -12,6 +12,14 @@ pc/bin/
 mobile/ios/
 mobile/android/
 
+# native build output, also inside local Expo modules (mobile/modules/*)
+**/android/build/
+**/android/.gradle/
+**/android/.kotlin/
+**/android/.cxx/
+**/ios/build/
+**/ios/Pods/
+
 # editor / OS
 .DS_Store
 .idea/
