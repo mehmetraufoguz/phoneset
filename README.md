@@ -286,12 +286,11 @@ token and Host checks, the LaunchAgent enable/disable cycle) and the installer.
 The first releases (v0.1.0, v0.1.1) were built by CI and read back from GitHub: the checksums match, the macOS
 installer ran against them on an Apple silicon Mac, and a real `phoneset update` from 0.1.0 to 0.1.1 ran there
 too, with a background service that came back with its flags. The Windows one-line installer was run on a real
-Windows PC, and a phone was paired by scanning the QR code with its own camera app.
+Windows PC, and a phone was paired by scanning the QR code with its own camera app. On that PC the tray icon,
+the executable's icon in Explorer and start at login were checked too.
 
 Not yet exercised:
 
-- on Windows, start at login and the executable's icon in Explorer (they build in CI and the icon's
-  resource tree checks out, but nobody has looked at them on a real machine yet);
 - on macOS, **the audio content of the system-audio tap** (macOS delivers silence until the
   permission above is granted; use `phoneset test` to check), the BlackHole microphone path,
   capturing an input device, Intel Macs and macOS before 14.2, and the menu bar icon (the process
