@@ -1,21 +1,28 @@
-# phoneset protocol, version 1
+# phoneset protocol, version 2
 
 The PC runs a small server; the phone connects to it. Everything after the first
 two messages is encrypted and authenticated. The reference implementations are
 `pc/internal/proto`, `pc/internal/secure` and `mobile/src/core`.
+
+Version 2 replaced version 1 (X25519 and ChaCha20-Poly1305, run by a cryptography library in
+the phone app) with primitives that both phone operating systems provide themselves: P-256
+ECDH, HKDF-SHA-256, HMAC-SHA-256 and AES-256-GCM. The app carries no cryptography of its
+own: it calls CryptoKit on iOS and the Java cryptography architecture on Android
+(`mobile/modules/phoneset-crypto`), and the PC uses Go's standard library. A phone and a PC
+that speak different versions do not talk to each other: the paths below carry the version.
 
 ## 1. Finding the PC
 
 | Source        | Provides                                                           |
 | ------------- | ------------------------------------------------------------------ |
 | QR code       | PC id, name, up to three addresses, port, a 128-bit pairing secret |
-| mDNS          | `_phoneset._tcp` service, TXT `v=1`, `id=<pc id>`, `n=<pc name>`   |
+| mDNS          | `_phoneset._tcp` service, TXT `v=2`, `id=<pc id>`, `n=<pc name>`   |
 | Typed address | host only, default port `47831`                                    |
 
 The QR code is the URL
 
 ```
-phoneset://pair?v=1&id=<pc id>&n=<url-encoded name>&h=<ip>,<ip>&p=<port>&k=<base64url secret>
+phoneset://pair?v=2&id=<pc id>&n=<url-encoded name>&h=<ip>,<ip>&p=<port>&k=<base64url secret>
 ```
 
 Scanning it with the phone's system camera opens the app on its pairing screen
@@ -25,36 +32,39 @@ A PC has several addresses and only some are reachable from the phone, so the
 phone asks every address at once and uses the first that answers:
 
 ```
-GET http://<host>:<port>/v1/info
--> {"app":"phoneset","v":1,"id":"<pc id>","name":"<pc name>"}
+GET http://<host>:<port>/v2/info
+-> {"app":"phoneset","v":2,"id":"<pc id>","name":"<pc name>"}
 ```
 
 and checks `id` against the one it expects.
 
 ## 2. Transport
 
-WebSocket at `ws://<host>:<port>/v1/ws`. Every message is a binary frame.
+WebSocket at `ws://<host>:<port>/v2/ws`. Every message is a binary frame.
 
 ## 3. Handshake (plaintext)
 
 ```
-client -> server   0x01 || client_pub        33 bytes: version, X25519 public key
-server -> client   server_pub                32 bytes
+client -> server   0x02 || client_pub        66 bytes: version, P-256 public key
+server -> client   server_pub                65 bytes
 ```
+
+A public key is an uncompressed P-256 point, `0x04 || X || Y` (X9.63, 65 bytes). A key that is
+not a point on the curve ends the connection.
 
 Both sides compute
 
 ```
-shared     = X25519(own_secret, peer_pub)
-transcript = SHA-256("phoneset/v1" || client_pub || server_pub)
-okm        = HKDF-SHA-256(ikm = shared, salt = transcript, info = "phoneset/v1/keys", 64 bytes)
+shared     = ECDH-P256(own_secret, peer_pub)      the 32-byte x coordinate
+transcript = SHA-256("phoneset/v2" || client_pub || server_pub)
+okm        = HKDF-SHA-256(ikm = shared, salt = transcript, info = "phoneset/v2/keys", 64 bytes)
 key_c2s    = okm[0:32]      key_s2c = okm[32:64]
 ```
 
 ## 4. Encrypted channel
 
-Each message is `ChaCha20-Poly1305(key, nonce, aad = transcript, plaintext)`.
-The nonce is 4 zero bytes followed by a big-endian `u64` counter, one counter per
+Each message is `AES-256-GCM(key, nonce, aad = transcript, plaintext)`, sent as the ciphertext
+followed by the 16-byte tag. The nonce is 12 bytes: 4 zero bytes followed by a big-endian `u64` counter, one counter per
 direction, starting at 0. Counters are not sent: the WebSocket is ordered and
 reliable, so both sides stay in step, and a lost or reordered message fails
 authentication and ends the connection.
@@ -138,7 +148,7 @@ its stale connection; a different phone gets `busy`.
 
 ## 7. Audio
 
-Fixed in v1: 48 kHz, signed 16-bit little endian PCM, 20 ms frames.
+Fixed in v2: 48 kHz, signed 16-bit little endian PCM, 20 ms frames.
 Microphone audio is mono (960 samples, 1920 bytes); PC audio is interleaved
 stereo (960 frames, 3840 bytes).
 

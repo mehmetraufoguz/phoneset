@@ -228,7 +228,7 @@ If the phone can't find the PC: both must be on the same Wi-Fi (guest networks a
 ## How it's built
 
 **PC (Go, `pc/`).** `cmd/phoneset` is the CLI; `internal/` holds `proto` (wire types),
-`secure` (X25519 + ChaCha20-Poly1305 channel), `pairing` (code/secret offers),
+`secure` (P-256 + AES-256-GCM channel), `pairing` (code/secret offers),
 `store` (identity and paired phones), `server` (WebSocket, auth, sessions),
 `discovery` (mDNS and addresses), `audio` (the `Backend` interface, jitter buffer,
 resampling), `app` (one `Snapshot` of what the agent is doing, read by every front end),
@@ -244,11 +244,13 @@ Anywhere else, and macOS built with `CGO_ENABLED=0`, gets a synthetic developmen
 (a tone and a WAV dump) so the rest of the program still runs.
 
 **Phone (Expo, `mobile/`).** `src/core` is platform-free Effect code: services
-(`Session`, `PairedPcs`, `Discovery`, `AudioIO`, `SocketFactory`, `KeyValue`, `Entropy`)
-wired by layers, a typed protocol (`Schema`), the encrypted channel, and the session state
-machine, which reconnects on its own after a drop. `src/platform` supplies the native
+(`Session`, `PairedPcs`, `Discovery`, `AudioIO`, `SocketFactory`, `KeyValue`, `Entropy`,
+`Crypto`) wired by layers, a typed protocol (`Schema`), the encrypted channel, and the session
+state machine, which reconnects on its own after a drop. `src/platform` supplies the native
 implementations (`react-native-audio-api`, `react-native-zeroconf`, `expo-secure-store`,
-`expo-crypto`). `src/core/presence.ts` turns the session into the text shown outside the app, and
+`expo-crypto`). The phone app has no cryptography library of its own: `modules/phoneset-crypto`
+is a small Expo module that calls CryptoKit on iOS and the Java cryptography architecture on
+Android (P-256 ECDH, HKDF, HMAC, SHA-256, AES-256-GCM). `src/core/presence.ts` turns the session into the text shown outside the app, and
 `src/platform/presence.ts` puts it in an Android notification or an iOS Live Activity
 (`src/widgets`, written with Expo UI through `expo-widgets`). `src/app` is expo-router;
 screens use Expo UI's universal components, so iOS renders SwiftUI and Android renders

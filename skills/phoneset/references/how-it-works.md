@@ -37,8 +37,8 @@ battery with no warming.
 
 ## Security
 
-Every connection starts with an X25519 key exchange and everything after it is ChaCha20-Poly1305 with keys
-bound to the handshake. Pairing uses a one-time secret from the QR code (128 bits) or the 6-digit code
+Every connection starts with a P-256 key exchange and everything after it is AES-256-GCM with keys
+bound to the handshake (the phone uses its operating system's own cryptography, the PC Go's standard library). Pairing uses a one-time secret from the QR code (128 bits) or the 6-digit code
 (5 attempts, 5 minutes, single use) and ends with the PC handing the phone a random token that both use to
 prove themselves on every later connection. The QR path is strong; the 6-digit path is vulnerable to an
 attacker who is actively *in the middle of that one pairing* (the code is only 20 bits), so prefer the QR code

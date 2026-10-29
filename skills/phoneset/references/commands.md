@@ -74,7 +74,7 @@ The icon is the app's icon, with a green dot while a phone is connected. Menu: s
 
 ## Network
 
-TCP 47831 (WebSocket `/v1/ws`, info at `/v1/info`) plus an mDNS service `_phoneset._tcp`. The control API
+TCP 47831 (WebSocket `/v2/ws`, info at `/v2/info`) plus an mDNS service `_phoneset._tcp`. The control API
 and pairing page listen on `127.0.0.1` only, on a random port, and need the token from `control.json`.
 
 ## Exit and error behaviour
