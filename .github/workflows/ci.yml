@@ -1,12 +1,17 @@
 name: ci
 
+# CI runs only when the commit message contains "!release" (a pull request: its title), or when it is
+# started by hand from the Actions tab. Only the last commit of a push is looked at. Without the marker
+# every job is skipped and no runner is used. Releases are built by release.yml, which a version tag starts.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   pc:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '!release') || contains(github.event.pull_request.title, '!release')
     # Windows runner: the WASAPI backend is compiled natively here.
     runs-on: windows-latest
     defaults:
@@ -33,6 +38,7 @@ jobs:
           path: pc/phoneset.exe
 
   pc-macos:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '!release') || contains(github.event.pull_request.title, '!release')
     # The CoreAudio backend uses cgo (Objective-C), so it needs a Mac to build on.
     runs-on: macos-latest
     strategy:
@@ -57,6 +63,7 @@ jobs:
           path: pc/phoneset
 
   mobile:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '!release') || contains(github.event.pull_request.title, '!release')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
