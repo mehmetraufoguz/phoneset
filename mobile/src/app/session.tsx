@@ -24,7 +24,7 @@ export default function SessionScreen() {
     <Host style={{ flex: 1 }} seedColor={BRAND}>
       <FieldGroup>
         {state._tag === "Connected" ? (
-          <Connected state={state} onDisconnect={disconnect} />
+          connectedSections(state, colors, disconnect)
         ) : state._tag === "Failed" ? (
           <FieldGroup.Section title="Couldn't connect">
             <Text textStyle={{ color: colors.danger }}>{state.message}</Text>
@@ -46,15 +46,14 @@ export default function SessionScreen() {
   )
 }
 
-function Connected({
-  state,
-  onDisconnect
-}: {
-  state: Extract<SessionState, { _tag: "Connected" }>
+// A plain function, not a component: FieldGroup only lays out Sections that are its direct children
+// (or inside a Fragment). A component in between is treated as one row, and on Android its Sections
+// then never show.
+function connectedSections(
+  state: Extract<SessionState, { _tag: "Connected" }>,
+  colors: ReturnType<typeof useColors>,
   onDisconnect: () => void
-}) {
-  const colors = useColors()
-
+) {
   const detail = (s: StreamStatus, on: string, off: string) =>
     s.error ?? (s.on ? on : s.available ? off : "Not available on this PC")
 
