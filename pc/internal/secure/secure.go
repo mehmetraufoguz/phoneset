@@ -1,32 +1,35 @@
 // Package secure implements the encrypted channel that sits on top of a
-// WebSocket: an ephemeral X25519 exchange, HKDF-derived per-direction keys and
-// ChaCha20-Poly1305 for every message. Counters double as nonces, which is safe
-// because the WebSocket is ordered and reliable.
+// WebSocket: an ephemeral P-256 ECDH exchange, HKDF-derived per-direction keys and
+// AES-256-GCM for every message. Counters double as nonces, which is safe
+// because the WebSocket is ordered and reliable. Every primitive is one the phone's
+// operating system provides (CryptoKit on iOS, the Java cryptography architecture on
+// Android), so the phone app carries no cryptography of its own.
 package secure
 
 import (
 	"context"
+	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
+	"crypto/hkdf"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
-	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/hkdf"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/proto"
 )
 
 const (
-	helloLen     = 1 + 32
+	pubLen       = 65 // uncompressed P-256 point: 0x04 || X || Y
+	helloLen     = 1 + pubLen
+	nonceLen     = 12
 	maxMessage   = 1 << 16
 	writeTimeout = 3 * time.Second
 )
@@ -57,7 +60,8 @@ func Accept(ctx context.Context, ws *websocket.Conn) (*Channel, error) {
 		return nil, errHello
 	}
 
-	curve := ecdh.X25519()
+	curve := ecdh.P256()
+	// NewPublicKey rejects anything that is not a point on the curve.
 	clientPub, err := curve.NewPublicKey(hello[1:])
 	if err != nil {
 		return nil, errHello
@@ -79,31 +83,39 @@ func Accept(ctx context.Context, ws *websocket.Conn) (*Channel, error) {
 	}
 
 	h := sha256.New()
-	h.Write([]byte("phoneset/v1"))
+	h.Write([]byte("phoneset/v2"))
 	h.Write(hello[1:])
 	h.Write(serverPub)
 	c := &Channel{ws: ws}
 	copy(c.transcript[:], h.Sum(nil))
 
-	okm := make([]byte, 64)
-	if _, err := io.ReadFull(hkdf.New(sha256.New, shared, c.transcript[:], []byte("phoneset/v1/keys")), okm); err != nil {
+	okm, err := hkdf.Key(sha256.New, shared, c.transcript[:], "phoneset/v2/keys", 64)
+	if err != nil {
 		return nil, err
 	}
 	// Client-to-server key first; the server receives with it and sends with the other.
-	if c.recv, err = chacha20poly1305.New(okm[:32]); err != nil {
+	if c.recv, err = newGCM(okm[:32]); err != nil {
 		return nil, err
 	}
-	if c.send, err = chacha20poly1305.New(okm[32:]); err != nil {
+	if c.send, err = newGCM(okm[32:]); err != nil {
 		return nil, err
 	}
 	return c, nil
+}
+
+func newGCM(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCM(block)
 }
 
 // Transcript binds proofs to this particular handshake.
 func (c *Channel) Transcript() []byte { return c.transcript[:] }
 
 func nonce(n uint64) []byte {
-	var b [chacha20poly1305.NonceSize]byte
+	var b [nonceLen]byte
 	binary.BigEndian.PutUint64(b[4:], n)
 	return b[:]
 }

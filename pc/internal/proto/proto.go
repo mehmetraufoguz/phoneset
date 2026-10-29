@@ -1,16 +1,16 @@
-// Package proto defines the phoneset wire protocol (v1).
+// Package proto defines the phoneset wire protocol (v2).
 // The authoritative description lives in docs/protocol.md.
 package proto
 
 const (
-	Version     = 1
+	Version     = 2
 	ServiceType = "_phoneset._tcp"
 	DefaultPort = 47831
-	WSPath      = "/v1/ws"
-	InfoPath    = "/v1/info"
+	WSPath      = "/v2/ws"
+	InfoPath    = "/v2/info"
 )
 
-// Audio parameters are fixed in v1: 48 kHz, signed 16-bit little endian,
+// Audio parameters are fixed in v2: 48 kHz, signed 16-bit little endian,
 // 20 ms frames. The phone's microphone is mono, the PC's output is stereo.
 const (
 	SampleRate      = 48000

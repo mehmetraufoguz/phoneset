@@ -178,7 +178,7 @@ func (a *App) notify() {
 	}
 }
 
-// link is what the QR code carries: phoneset://pair?v=1&id=..&n=..&h=ip,ip&p=port&k=secret
+// link is what the QR code carries: phoneset://pair?v=2&id=..&n=..&h=ip,ip&p=port&k=secret
 func (a *App) link(secret []byte) string {
 	ident := a.Store.Identity()
 	addrs := discovery.Addrs()
