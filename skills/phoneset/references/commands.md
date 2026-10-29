@@ -70,7 +70,7 @@ The icon is the app's icon, with a green dot while a phone is connected. Menu: s
 | `identity.json` | this PC's id and name | same |
 | `phoneset.log` | background service log (rotates at 2 MB to `.1`) | same |
 | `control.json` | port and token of the running instance, deleted on exit | same |
-| Start at login | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `phoneset` | `~/Library/LaunchAgents/dev.mehmetraufoguz.phoneset.plist` (+ `~/Library/Logs/phoneset-launchd.log`) |
+| Start at login | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `phoneset` | `~/Library/LaunchAgents/com.rapp.phoneset.plist` (+ `~/Library/Logs/phoneset-launchd.log`; 0.1.0 used `dev.mehmetraufoguz.phoneset`, which `autostart enable` and `disable` replace) |
 
 ## Network
 

@@ -158,7 +158,7 @@ phones** (forget one), **Start at login**, **Check for updates**, **Open log** a
 
 Starting at login is opt-in. On Windows it adds a per-user entry under
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; on macOS it installs a LaunchAgent
-(`~/Library/LaunchAgents/dev.mehmetraufoguz.phoneset.plist`) that launchd restarts after a crash
+(`~/Library/LaunchAgents/com.rapp.phoneset.plist`) that launchd restarts after a crash
 but not after a clean quit. `phoneset autostart disable` (or the tray menu) removes it. The log
 is `phoneset.log` next to the pairings. Only one instance runs per config directory.
 
@@ -214,7 +214,7 @@ phone shows it outside the app too, so you can see it is working:
   the background while the microphone or headphones are on. It is **off by default**: the widget
   extension shares an App Group with the app, and that group has to be registered once in your Apple
   Developer account (Certificates, Identifiers & Profiles > Identifiers > App Groups:
-  `group.dev.mehmetraufoguz.phoneset`). Then build with `PHONESET_LIVE_ACTIVITY=1 pnpm mobile:ios`.
+  `group.com.rapp.phoneset`). Then build with `PHONESET_LIVE_ACTIVITY=1 pnpm mobile:ios`.
 
 **Echo.** With the phone's speaker playing the PC's audio, its microphone hears it and sends it back. Earphones
 solve that for good. On iPhone the session screen has **Echo cancellation** under **Sound**: it puts the phone in

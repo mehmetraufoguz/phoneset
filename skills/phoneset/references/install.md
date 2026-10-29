@@ -95,7 +95,7 @@ pnpm mobile:android     # Android Studio / SDK
 - iOS asks for **Local Network** (to find the PC), **Microphone** and **Camera** (to scan the QR code).
 - Check free disk space first: a native iOS build writes several GB.
 - The iOS Live Activity (lock screen / Dynamic Island) is off by default because its widget extension needs an
-  App Group registered once in the Apple Developer account (`group.dev.mehmetraufoguz.phoneset`). Then:
+  App Group registered once in the Apple Developer account (`group.com.rapp.phoneset`). Then:
   `PHONESET_LIVE_ACTIVITY=1 pnpm mobile:ios`.
 - Android shows a notification while connected (a foreground service) and needs the microphone permission first.
 

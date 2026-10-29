@@ -82,7 +82,7 @@ Echo means the phone's microphone hears the phone's own speaker: PC audio plays 
 ## Start at login does nothing
 
 - `phoneset autostart status`. Windows: the value is under `HKCU\...\Run`; it points at the exe's current
-  path, so re-run `autostart enable` after moving the file. macOS: `launchctl print gui/$(id -u)/dev.mehmetraufoguz.phoneset`;
+  path, so re-run `autostart enable` after moving the file. macOS: `launchctl print gui/$(id -u)/com.rapp.phoneset`;
   launchd restarts a crashed service but not a clean quit (Quit from the tray stays quit until next login).
 
 ## It sounds choppy
