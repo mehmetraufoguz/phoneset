@@ -6,6 +6,7 @@ import { summarize } from "../core/presence"
 import { Session } from "../core/session"
 import { type PairedPc, PairedPcs } from "../core/storage"
 import { act, BRAND, useColors, useDiscovered, usePairedPcs, useSessionState } from "../ui/hooks"
+import { ToolbarButton } from "../ui/toolbar"
 
 export default function Home() {
   const router = useRouter()
@@ -56,16 +57,26 @@ export default function Home() {
 
   return (
     <>
+      <Stack.Toolbar placement="left">
+        <ToolbarButton glyph="settings" label="Settings" onPress={() => router.push("/settings")} />
+      </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus" onPress={() => router.push("/pair")} />
+        <ToolbarButton glyph="plus" label="Pair a PC" onPress={() => router.push("/pair")} />
       </Stack.Toolbar>
       <Host style={{ flex: 1 }} seedColor={BRAND}>
         <FieldGroup>
           <FieldGroup.Section title="Your PCs">
             {pcs.length === 0 ? (
-              <Text textStyle={{ color: colors.secondary }}>
-                No PC yet. Start phoneset on your PC, then tap + to pair it.
-              </Text>
+              <>
+                <Text textStyle={{ color: colors.secondary }}>
+                  No PC yet. Start phoneset on your PC, then tap + to pair it.
+                </Text>
+                <Button
+                  variant="outlined"
+                  label="How it works"
+                  onPress={() => router.push("/help")}
+                />
+              </>
             ) : (
               pcs.map((pc) => {
                 const info = detail(pc)
