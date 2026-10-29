@@ -9,6 +9,8 @@
     "icon": "./assets/icon.png",
     "ios": {
       "bundleIdentifier": "com.rapp.phoneset",
+      "appleTeamId": "JY83GWM55C",
+      "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "phoneset connects to your PC over your Wi-Fi network.",
@@ -20,20 +22,43 @@
     },
     "android": {
       "package": "com.rapp.phoneset",
+      "versionCode": 1,
+      "allowBackup": false,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#3B6BFF"
       },
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_WIFI_STATE",
-        "android.permission.CHANGE_WIFI_MULTICAST_STATE",
-        "android.permission.NEARBY_WIFI_DEVICES"
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE"
       ]
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/adaptive-icon.png",
+          "imageWidth": 280,
+          "backgroundColor": "#3B6BFF"
+        }
+      ],
       [
         "expo-camera",
         {

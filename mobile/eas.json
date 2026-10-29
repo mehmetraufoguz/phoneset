@@ -1,0 +1,25 @@
+{
+  "cli": {
+    "version": ">= 17.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleTeamId": "JY83GWM55C"
+      }
+    }
+  }
+}
