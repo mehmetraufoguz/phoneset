@@ -6,7 +6,7 @@ import { summarize } from "../core/presence"
 import { Session } from "../core/session"
 import { type PairedPc, PairedPcs } from "../core/storage"
 import { act, BRAND, useColors, useDiscovered, usePairedPcs, useSessionState } from "../ui/hooks"
-import { ToolbarButton } from "../ui/toolbar"
+import { toolbarButton } from "../ui/toolbar"
 
 export default function Home() {
   const router = useRouter()
@@ -58,10 +58,10 @@ export default function Home() {
   return (
     <>
       <Stack.Toolbar placement="left">
-        <ToolbarButton glyph="settings" label="Settings" onPress={() => router.push("/settings")} />
+        {toolbarButton("settings", "Settings", () => router.push("/settings"))}
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        <ToolbarButton glyph="plus" label="Pair a PC" onPress={() => router.push("/pair")} />
+        {toolbarButton("plus", "Pair a PC", () => router.push("/pair"))}
       </Stack.Toolbar>
       <Host style={{ flex: 1 }} seedColor={BRAND}>
         <FieldGroup>

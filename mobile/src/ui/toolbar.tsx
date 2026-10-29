@@ -8,20 +8,18 @@ const glyphs = {
   settings: { sf: "gearshape", src: require("../../assets/toolbar/settings.png") }
 } as const
 
-/** A header button that shows on both platforms. Use inside `<Stack.Toolbar placement=…>`. */
-export function ToolbarButton({
-  glyph,
-  label,
-  onPress
-}: {
-  glyph: keyof typeof glyphs
-  label: string
-  onPress: () => void
-}) {
+/**
+ * A header button that shows on both platforms. Call it, don't render it as a component:
+ * `Stack.Toolbar` reads its children by type, so a wrapper component is skipped on iOS and
+ * the button never shows.
+ */
+export function toolbarButton(glyph: keyof typeof glyphs, label: string, onPress: () => void) {
   const { sf, src } = glyphs[glyph]
-  return (
+  return Platform.OS === "ios" ? (
+    <Stack.Toolbar.Button icon={sf} accessibilityLabel={label} onPress={onPress} />
+  ) : (
     <Stack.Toolbar.Button accessibilityLabel={label} onPress={onPress}>
-      <Stack.Toolbar.Icon {...(Platform.OS === "ios" ? { sf } : { src })} />
+      <Stack.Toolbar.Icon src={src} />
     </Stack.Toolbar.Button>
   )
 }
