@@ -13,7 +13,7 @@ Items marked **decide** or **unverified** need a person before submitting.
 | Primary language          | English (U.S.)                                                                                                                     |
 | Bundle ID                 | `com.rapp.phoneset` (register it under Identifiers first, or the New App list will not offer it)                                   |
 | SKU                       | `phoneset-ios`                                                                                                                     |
-| Version                   | **decide**: `app.json` says `0.1.0`; App Store Connect accepts it, `1.0.0` is the usual first release                              |
+| Version                   | `0.2.0`, the same as the PC program's latest release (`app.json`, `mobile/package.json`)                                           |
 | Price                     | one price tier, the lowest Apple offers is US$0.99 (the plan was "$1")                                                             |
 | Availability              | all countries; **turn off** "Make this app available on Apple silicon Macs" (a phone-to-PC bridge makes no sense running on a Mac) |
 

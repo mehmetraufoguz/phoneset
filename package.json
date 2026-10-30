@@ -1,6 +1,6 @@
 {
   "name": "phoneset",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "Use your phone as your PC's microphone and headphones over Wi-Fi.",
