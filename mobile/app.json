@@ -96,6 +96,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2747ddb7-9180-4277-835c-d77b95e2d3c5"
+      }
+    },
+    "owner": "mehmetraufoguz"
   }
 }

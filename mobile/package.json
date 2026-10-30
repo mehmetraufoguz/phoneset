@@ -9,7 +9,10 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "prebuild": "expo prebuild",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eas:init": "pnpm dlx eas-cli@21.2.0 init",
+    "eas:build:ios": "pnpm dlx eas-cli@21.2.0 build --platform ios --profile production",
+    "eas:submit:ios": "pnpm dlx eas-cli@21.2.0 submit --platform ios --profile production"
   },
   "dependencies": {
     "@expo/ui": "~58.0.24",
