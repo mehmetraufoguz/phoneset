@@ -17,7 +17,11 @@ Items marked **decide** or **unverified** need a person before submitting.
 | Price                     | one price tier, the lowest Apple offers is US$0.99 (the plan was "$1")                                                             |
 | Availability              | all countries; **turn off** "Make this app available on Apple silicon Macs" (a phone-to-PC bridge makes no sense running on a Mac) |
 
-Creating the record cannot be done with the App Store Connect API. Either use the website (My Apps, +, New App)
+`private/setup.sh` applies everything below that `asc` can set (texts from `private/metadata/`, categories, age rating,
+content rights, price, availability, copyright, release type, review contact and notes, the build); it is a dry run
+unless `CONFIRM=1`. The `private/` folder is git-ignored because the repository is public, so it exists on the
+owner's Mac only. App Privacy, the "Regulations and Permits" declarations and the Apple silicon Mac checkbox
+are website-only. Creating the record cannot be done with the App Store Connect API. Either use the website (My Apps, +, New App)
 or `asc web apps create --name "phoneset" --bundle-id "com.rapp.phoneset" --sku "phoneset-ios"`, which signs in
 with a web session.
 
@@ -90,12 +94,10 @@ iPhone 13 Pro takes 1170 x 2532, which only counts as an optional size.
 Contact name, email and phone (international format, with the plus sign) are filled in on the website; they
 are not kept in this repository. No sign-in is needed, so leave the demo account empty.
 
-Notes (4000 bytes at most):
+Notes (4000 bytes at most; the same text is `private/review-notes.txt`, which `setup.sh` sends):
 
 ```
 phoneset is the phone half of a pair. It turns the iPhone into the microphone and headphones of the user's own Windows PC or Mac, over the local Wi-Fi. It needs a free companion program running on a computer. There is no account, no sign-in and no demo account.
-
-A screen recording of the whole flow, made with a real iPhone and a Windows PC: <VIDEO URL>
 
 To try it yourself with a Mac on the same Wi-Fi as the iPhone:
 1. In Terminal on the Mac: curl -fsSL https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-mac.sh | sh
@@ -114,8 +116,9 @@ The gear at the top left of the home screen opens Settings (support, privacy pol
 ```
 
 **Review risk (2.1).** A reviewer without a Windows PC will see "not available on this PC" for the microphone on
-a Mac without BlackHole. The video is what makes the review pass, so record it before submitting. Two things
-would lower the risk: a clearer message in the app (the PC knows why the microphone is unavailable) and a
+a Mac without BlackHole. A screen recording of the whole flow (real iPhone, Windows PC) would make the review
+pass; it is not recorded yet and the owner chose to submit without it. If App Review asks for it, record it and
+answer in the Resolution Center. Two things would lower the risk: a clearer message in the app (the PC knows why the microphone is unavailable) and a
 review-friendly mode in the PC program.
 
 ## 5. App Privacy, age rating, export compliance

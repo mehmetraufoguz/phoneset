@@ -33,3 +33,6 @@ mobile/android/
 *.spec.ts
 *.spec.tsx
 __tests__/
+
+# App Store Connect setup (ids, review notes, store texts): the repository is public.
+docs/store/private/
