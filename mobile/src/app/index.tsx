@@ -42,6 +42,20 @@ export default function Home() {
     }
   }
 
+  const details = (pc: PairedPc) => {
+    const info = detail(pc)
+    return (
+      <Button variant="text" onPress={() => open(pc)}>
+        <Column spacing={2}>
+          <Text textStyle={{ fontSize: 17, fontWeight: "600" }}>
+            {connectedId === pc.id ? `● ${pc.name}` : pc.name}
+          </Text>
+          <Text textStyle={{ fontSize: 13, color: info.color }}>{info.text}</Text>
+        </Column>
+      </Button>
+    )
+  }
+
   const forget = (pc: PairedPc) =>
     Alert.alert(`Forget ${pc.name}?`, "You'll need to pair with it again to use it.", [
       { text: "Cancel", style: "cancel" },
@@ -78,32 +92,27 @@ export default function Home() {
                 />
               </>
             ) : (
-              pcs.map((pc) => {
-                const info = detail(pc)
-                const connected = connectedId === pc.id
-                return (
+              // A connected PC's status line is long ("Connected · Microphone on · Headphones on").
+              // Beside it in a Row it takes the width first and squeezes Disconnect into
+              // "Disc/onne/ct", so Disconnect goes under it.
+              pcs.map((pc) =>
+                connectedId === pc.id ? (
+                  <Column key={pc.id} spacing={2}>
+                    {details(pc)}
+                    <Button
+                      variant="text"
+                      label="Disconnect"
+                      onPress={() => act(Session.use((s) => s.stop))}
+                    />
+                  </Column>
+                ) : (
                   <Row key={pc.id} alignment="center" spacing={8}>
-                    <Button variant="text" onPress={() => open(pc)}>
-                      <Column spacing={2}>
-                        <Text textStyle={{ fontSize: 17, fontWeight: "600" }}>
-                          {connected ? `● ${pc.name}` : pc.name}
-                        </Text>
-                        <Text textStyle={{ fontSize: 13, color: info.color }}>{info.text}</Text>
-                      </Column>
-                    </Button>
+                    {details(pc)}
                     <Spacer flexible />
-                    {connected ? (
-                      <Button
-                        variant="text"
-                        label="Disconnect"
-                        onPress={() => act(Session.use((s) => s.stop))}
-                      />
-                    ) : (
-                      <Button variant="text" label="Forget" onPress={() => forget(pc)} />
-                    )}
+                    <Button variant="text" label="Forget" onPress={() => forget(pc)} />
                   </Row>
                 )
-              })
+              )
             )}
           </FieldGroup.Section>
         </FieldGroup>
