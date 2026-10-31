@@ -6,9 +6,8 @@ compatibility_date = "2025-06-01"
 # creates the DNS record and the certificate when the Worker is deployed.
 routes = [{ pattern = "claim-phoneset.rauf.app", custom_domain = true }]
 
-# The database id below is a placeholder that works for local runs. Create the real
-# database with `wrangler d1 create phoneset-claim` and paste its id here before deploying.
+# The id of the database made with `wrangler d1 create phoneset-claim`. It is not a secret.
 [[d1_databases]]
 binding = "DB"
 database_name = "phoneset-claim"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "504c433e-9b49-4526-966f-caae4a9fff76"
