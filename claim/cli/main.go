@@ -155,7 +155,7 @@ func (a *app) open() error {
 	if err := os.MkdirAll(a.home, 0o700); err != nil {
 		return err
 	}
-	a.cfg = config{BaseURL: "https://claim.rauf.app", DB: "phoneset-claim"}
+	a.cfg = config{BaseURL: "https://claim-phoneset.rauf.app", PageURL: "https://rauf.app/phoneset/claim", DB: "phoneset-claim"}
 	cfgPath := filepath.Join(a.home, "config.json")
 	if data, err := os.ReadFile(cfgPath); err == nil {
 		if err := json.Unmarshal(data, &a.cfg); err != nil {
@@ -168,7 +168,9 @@ func (a *app) open() error {
 		}
 	}
 	if a.local {
+		// A local test uses the local Worker, and its own page unless PROMO_PAGE_URL names a local site.
 		a.cfg.BaseURL = "http://127.0.0.1:8787"
+		a.cfg.PageURL = os.Getenv("PROMO_PAGE_URL")
 	}
 	a.cfg.BaseURL = strings.TrimRight(a.cfg.BaseURL, "/")
 	a.db = d1{dir: filepath.Join(a.root, "claim", "worker"), db: a.cfg.DB, local: a.local}
@@ -176,4 +178,11 @@ func (a *app) open() error {
 	return err
 }
 
-func (a *app) link(p person) string { return a.cfg.BaseURL + "/c/" + p.Token }
+// link is what goes into the email. On the page the token sits after the #, which a browser never sends to
+// a server, so it stays out of every log; the Worker's own page has it in the path instead.
+func (a *app) link(p person) string {
+	if a.cfg.PageURL != "" {
+		return strings.TrimRight(a.cfg.PageURL, "/") + "#" + p.Token
+	}
+	return a.cfg.BaseURL + "/c/" + p.Token
+}

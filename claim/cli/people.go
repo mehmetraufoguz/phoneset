@@ -31,7 +31,8 @@ type person struct {
 }
 
 type config struct {
-	BaseURL string `json:"baseUrl"`
+	BaseURL string `json:"baseUrl"`           // the Worker, where the API is
+	PageURL string `json:"pageUrl,omitempty"` // the page people open (on rauf.app); empty means the Worker's own page
 	DB      string `json:"db"`
 }
 
