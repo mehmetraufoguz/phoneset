@@ -1,0 +1,10 @@
+name = "phoneset-claim"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+# The database id below is a placeholder that works for local runs. Create the real
+# database with `wrangler d1 create phoneset-claim` and paste its id here before deploying.
+[[d1_databases]]
+binding = "DB"
+database_name = "phoneset-claim"
+database_id = "00000000-0000-0000-0000-000000000000"
