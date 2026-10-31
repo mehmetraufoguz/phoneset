@@ -1,0 +1,4 @@
+worker/.wrangler/
+worker/node_modules/
+cli/promo
+worker/.dev.vars
