@@ -2,7 +2,8 @@
 // scanner that prefetches the link cannot use it up); pressing the button POSTs the token, and the
 // oldest promo code that still has enough days left is bound to it. Opening the same link again
 // shows the same code. A token is signed with a secret key, so a made-up token is turned away without
-// the database being touched.
+// the database being touched. The same API also serves the page on rauf.app (a static site), so it answers
+// cross-origin calls from the sites listed in ALLOWED_ORIGINS and from no one else.
 
 interface D1Statement {
   bind(...values: unknown[]): D1Statement
@@ -13,6 +14,9 @@ interface Env {
   DB: { prepare(sql: string): D1Statement }
   // base64url, set with `wrangler secret put CLAIM_KEY`; the same key signs the links made by claim/cli
   CLAIM_KEY?: string
+  // Comma separated list of sites whose pages may call the API from a browser. Default: https://rauf.app.
+  // Only set it in .dev.vars, to test with a local site.
+  ALLOWED_ORIGINS?: string
 }
 
 type Claimed = { code: string; generated_on: string }
@@ -27,6 +31,7 @@ const CODE_DAYS = 28
 // A code is only handed out while it has at least this many days left (so generated_on is at most 21 days old).
 const MAX_AGE_DAYS = 21
 const TOKEN = /^[A-Za-z0-9_-]{43}$/
+const DEFAULT_ORIGINS = ["https://rauf.app"]
 const DAY = 86_400_000
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -197,23 +202,55 @@ go.addEventListener("click", async () => {
   })
 }
 
+function allowedOrigins(env: Env): string[] {
+  const listed = (env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean)
+  return listed.length ? listed : DEFAULT_ORIGINS
+}
+
+function withHeaders(response: Response, extra: Record<string, string>): Response {
+  for (const [name, value] of Object.entries(extra)) response.headers.set(name, value)
+  return response
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     if (request.method === "GET" && /^\/c\/[A-Za-z0-9_-]{43}$/.test(url.pathname)) {
       return page(crypto.randomUUID().replace(/-/g, ""))
     }
-    if (request.method === "POST" && url.pathname === "/api/claim") {
-      const site = request.headers.get("sec-fetch-site")
-      if (site && site !== "same-origin") return json({ error: "invalid" }, 403)
+    if (
+      url.pathname === "/api/claim" &&
+      (request.method === "POST" || request.method === "OPTIONS")
+    ) {
+      // A browser sends Origin on every cross-site call. The Worker's own page (same origin) and tools like
+      // curl are fine; any other site is turned away. This keeps other sites' pages from reading answers; the
+      // signed token is what actually protects the codes.
+      const origin = request.headers.get("origin")
+      const crossSite = origin !== null && origin !== url.origin
+      if (crossSite && !allowedOrigins(env).includes(origin)) return json({ error: "invalid" }, 403)
+      const cors: Record<string, string> = { vary: "origin" }
+      if (crossSite) cors["access-control-allow-origin"] = origin
+
+      if (request.method === "OPTIONS") {
+        return withHeaders(new Response(null, { status: 204 }), {
+          ...cors,
+          "access-control-allow-methods": "POST",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "86400",
+          "cache-control": "no-store"
+        })
+      }
       const body = (await request.json().catch(() => null)) as { token?: unknown } | null
       if (!body || typeof body.token !== "string" || !TOKEN.test(body.token))
-        return json({ error: "invalid" }, 400)
+        return withHeaders(json({ error: "invalid" }, 400), cors)
       try {
-        return await claim(env, body.token)
+        return withHeaders(await claim(env, body.token), cors)
       } catch {
         // Never show a stack trace; the page tells the person to try again.
-        return json({ error: "failed" }, 500)
+        return withHeaders(json({ error: "failed" }, 500), cors)
       }
     }
     return new Response("Not found", { status: 404, headers: { "cache-control": "no-store" } })

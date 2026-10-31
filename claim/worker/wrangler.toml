@@ -2,6 +2,10 @@ name = "phoneset-claim"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
+# The Worker answers on its own domain (the zone rauf.app must be on this Cloudflare account). Cloudflare
+# creates the DNS record and the certificate when the Worker is deployed.
+routes = [{ pattern = "claim-phoneset.rauf.app", custom_domain = true }]
+
 # The database id below is a placeholder that works for local runs. Create the real
 # database with `wrangler d1 create phoneset-claim` and paste its id here before deploying.
 [[d1_databases]]
