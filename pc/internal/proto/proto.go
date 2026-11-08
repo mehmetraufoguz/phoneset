@@ -7,6 +7,7 @@ const (
 	ServiceType = "_phoneset._tcp"
 	DefaultPort = 47831
 	WSPath      = "/v2/ws"
+	VideoPath   = "/v2/video" // a second connection, for the camera only (docs/protocol.md, section 8)
 	InfoPath    = "/v2/info"
 )
 
@@ -25,6 +26,7 @@ const (
 	FrameControl byte = 0x01
 	FrameMic     byte = 0x02
 	FrameSpeaker byte = 0x03
+	FrameVideo   byte = 0x04
 )
 
 // Control message tags.
@@ -38,6 +40,9 @@ const (
 	TPing   = "ping"
 	TPong   = "pong"
 	TStats  = "stats"
+	TVideo  = "video"
+	TVAck   = "vack"
+	TVStats = "vstats"
 	TError  = "error"
 	TBye    = "bye"
 )
@@ -56,6 +61,8 @@ const (
 	ErrRateLimited   = "rate_limited"
 	ErrBusy          = "busy"
 	ErrProtocol      = "protocol"
+	ErrNoSession     = "no_session" // the video connection needs the phone's main connection first
+	ErrVideoOff      = "video_off"
 )
 
 // Info is served unauthenticated on InfoPath so a phone can tell which of a PC's
@@ -119,6 +126,15 @@ type Ready struct {
 	Audio   AudioFormat `json:"audio"`
 	Mic     Endpoint    `json:"mic"`
 	Speaker Endpoint    `json:"speaker"`
+	Video   *VideoCaps  `json:"video,omitempty"` // nil on a PC that has no video
+}
+
+// VideoCaps tells the phone whether it may open the video connection (docs/protocol.md, section 8).
+type VideoCaps struct {
+	Available     bool   `json:"available"`
+	Reason        string `json:"reason,omitempty"`
+	Path          string `json:"path,omitempty"`
+	MaxFrameBytes int    `json:"maxFrameBytes,omitempty"`
 }
 
 // Stream is sent by the phone to request streams and echoed by the PC with the
@@ -129,6 +145,21 @@ type Stream struct {
 	Speaker    *bool  `json:"speaker,omitempty"`
 	MicError   string `json:"micError,omitempty"`
 	SpeakerErr string `json:"speakerError,omitempty"`
+}
+
+// VideoState is sent on the video connection: by the phone to start or stop the camera (and to say
+// which one), and by the PC with the state that is in effect.
+type VideoState struct {
+	T      string `json:"t"`
+	On     bool   `json:"on"`
+	Camera string `json:"camera,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// VideoAck confirms that the PC has read a video frame (section 8.3).
+type VideoAck struct {
+	T   string `json:"t"`
+	Seq uint32 `json:"seq"`
 }
 
 type Ping struct {
@@ -146,6 +177,14 @@ type MicStats struct {
 type SpeakerStats struct {
 	Sent    uint64 `json:"sent"`
 	Dropped uint64 `json:"dropped"`
+}
+
+// VideoStats is sent on the video connection every 2 s while the camera is on.
+type VideoStats struct {
+	T       string `json:"t"`
+	Frames  uint64 `json:"frames"`
+	Bytes   uint64 `json:"bytes"`
+	Viewers int    `json:"viewers"`
 }
 
 type Stats struct {
@@ -167,3 +206,16 @@ type Bye struct {
 
 // AudioHeaderLen is the length of the sequence number that prefixes PCM data.
 const AudioHeaderLen = 4
+
+// A video message is seq (u32), capture time in ms (u32), width (u16), height (u16), then a JPEG.
+const (
+	VideoHeaderLen = 12
+	// MaxVideoFrame is the largest JPEG a PC accepts. It is announced in Ready.
+	MaxVideoFrame = 1 << 20
+)
+
+// Camera facings in Stream.Camera.
+const (
+	CameraBack  = "back"
+	CameraFront = "front"
+)

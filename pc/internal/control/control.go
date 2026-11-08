@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"github.com/mehmetraufoguz/phoneset/pc/internal/app"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/icons"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/store"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/video"
 )
 
 // Info is written to control.json while an agent runs.
@@ -47,6 +49,7 @@ type Handler interface {
 	OpenPairing() (app.PairingInfo, error)
 	Disconnect() bool
 	Forget(ref string) ([]store.Device, error)
+	Video() *video.Hub
 }
 
 // Serve listens on a free loopback port and publishes it until ctx ends.
@@ -82,6 +85,10 @@ func Serve(ctx context.Context, dir, mode string, args []string, h Handler, stop
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write(icons.LogoPNG)
 	}))
+	// The camera of a phone (docs/protocol.md, section 9). Same listener, same token, same Host check.
+	mux.HandleFunc("GET /video.mjpg", s.guard(s.mjpeg))
+	mux.HandleFunc("GET /video.jpg", s.guard(s.snapshot))
+	mux.HandleFunc("GET /video", s.guard(s.videoPage))
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -182,6 +189,68 @@ func (a *api) pairPage(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(strings.ReplaceAll(pairHTML, "__TOKEN__", a.info.Token)))
 }
 
+// ------------------------------------------------------------------ video
+
+const mjpegBoundary = "phonesetframe"
+
+// mjpeg streams the camera as multipart/x-mixed-replace: one image/jpeg part per frame, the bytes as
+// the phone sent them. A reader that can't keep up is given the newest frame and skips the rest.
+func (a *api) mjpeg(w http.ResponseWriter, r *http.Request) {
+	sub := a.h.Video().Subscribe()
+	defer sub.Close()
+	w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary="+mjpegBoundary)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	rc := http.NewResponseController(w)
+	// The opening delimiter goes out with the headers, and every frame is followed by the next delimiter
+	// (as ffmpeg's mpjpeg does), so a reader that finds the end of a picture by the boundary has it the
+	// moment the picture is complete instead of one frame later.
+	_, _ = fmt.Fprintf(w, "--%s\r\n", mjpegBoundary)
+	if rc.Flush() != nil {
+		return
+	}
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case f := <-sub.C:
+			// A reader that stopped reading must not hold the connection forever.
+			_ = rc.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if _, err := fmt.Fprintf(w, "Content-Type: image/jpeg\r\nContent-Length: %d\r\nX-Phoneset-Seq: %d\r\n\r\n",
+				len(f.JPEG), f.Seq); err != nil {
+				return
+			}
+			if _, err := w.Write(f.JPEG); err != nil {
+				return
+			}
+			if _, err := fmt.Fprintf(w, "\r\n--%s\r\n", mjpegBoundary); err != nil {
+				return
+			}
+			if rc.Flush() != nil {
+				return
+			}
+		}
+	}
+}
+
+func (a *api) snapshot(w http.ResponseWriter, _ *http.Request) {
+	f := a.h.Video().Latest()
+	if f == nil {
+		http.Error(w, "no camera frame yet", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(f.JPEG)
+}
+
+func (a *api) videoPage(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write([]byte(strings.ReplaceAll(videoHTML, "__TOKEN__", a.info.Token)))
+}
+
 // ----------------------------------------------------------------- client
 
 var ErrNotRunning = errors.New("phoneset isn't running")
@@ -240,6 +309,12 @@ func (c *Client) Disconnect() error                    { return c.do("POST", "/a
 func (c *Client) Forget(ref string) error {
 	return c.do("POST", "/api/forget?ref="+strings.ReplaceAll(ref, " ", "%20"), nil)
 }
+
+// VideoURL is where a browser, or OBS (as a browser source or a media source), can show the camera.
+func (c *Client) VideoURL() string { return c.url("/video?t=" + c.Info.Token) }
+
+// MJPEGURL is the raw stream: multipart/x-mixed-replace, for programs that read MJPEG.
+func (c *Client) MJPEGURL() string { return c.url("/video.mjpg?t=" + c.Info.Token) }
 
 // PairPageURL is the pairing page, with the token so a browser may open it.
 func (c *Client) PairPageURL() string { return c.url("/pair?t=" + c.Info.Token) }

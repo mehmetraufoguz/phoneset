@@ -21,6 +21,7 @@ Run it in a terminal:
 Or in the background (tray icon on Windows and macOS):
   phoneset daemon            start in the background, then give the terminal back
   phoneset status            what is running, who is connected
+  phoneset video [--open]    where the phone's camera can be seen (--mjpeg: the raw MJPEG address)
   phoneset pair              show a pairing QR code and code for the running service
   phoneset stop              stop the background service
   phoneset logs              where the log is, and its last lines
@@ -42,7 +43,7 @@ Flags for serve and daemon:
                         cable (default: auto-detect VB-CABLE or BlackHole)
   --speaker-device TEXT device whose audio is sent to the phone (default: the system
                         default playback on Windows; system audio on macOS)
-  --no-mic, --no-speaker
+  --no-mic, --no-speaker, --no-video
   --tray                show the tray icon while running in the terminal
   --no-tray             no tray icon in the background
   --pair                open pairing even when phones are already paired
@@ -67,6 +68,8 @@ func main() {
 		err = cmdStop(args)
 	case "status":
 		err = cmdStatus(args)
+	case "video":
+		err = cmdVideo(args)
 	case "pair":
 		err = cmdPair(args)
 	case "logs":

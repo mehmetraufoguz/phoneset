@@ -19,6 +19,7 @@ import (
 	"github.com/mehmetraufoguz/phoneset/pc/internal/proto"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/server"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/store"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/video"
 )
 
 type PairingInfo struct {
@@ -46,6 +47,7 @@ type Snapshot struct {
 	Phone   *server.PhoneInfo `json:"phone"`
 	Mic     server.StreamInfo `json:"mic"`
 	Speaker server.StreamInfo `json:"speaker"`
+	Video   video.Status      `json:"video"`
 	Pairing *PairingInfo      `json:"pairing"`
 	Phones  []PhoneRow        `json:"phones"`
 }
@@ -112,6 +114,7 @@ func (a *App) Snapshot() Snapshot {
 		Phone:   act.Phone,
 		Mic:     act.Mic,
 		Speaker: act.Speaker,
+		Video:   act.Video,
 		Phones:  []PhoneRow{},
 	}
 	if offer, ok := a.Pairing.Current(); ok {
@@ -139,6 +142,9 @@ func (a *App) OpenPairing() (PairingInfo, error) {
 }
 
 func (a *App) Disconnect() bool { return a.Server.Disconnect() }
+
+// Video is where a phone's camera frames arrive.
+func (a *App) Video() *video.Hub { return a.Server.Video() }
 
 // Forget unpairs phones matching ref (id, name or "all"); a connected one is dropped.
 func (a *App) Forget(ref string) ([]store.Device, error) {

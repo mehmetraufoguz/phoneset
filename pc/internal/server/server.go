@@ -23,6 +23,7 @@ import (
 	"github.com/mehmetraufoguz/phoneset/pc/internal/proto"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/secure"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/store"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/video"
 )
 
 const authTimeout = 10 * time.Second
@@ -33,6 +34,7 @@ type Options struct {
 	SpeakerSelector string
 	NoMic           bool
 	NoSpeaker       bool
+	NoVideo         bool
 }
 
 type Server struct {
@@ -41,6 +43,7 @@ type Server struct {
 	pair  *pairing.Manager
 	audio audio.Backend
 	log   *slog.Logger
+	video *video.Hub
 
 	// OnPaired is called after a phone completed pairing.
 	OnPaired func(store.Device)
@@ -68,10 +71,14 @@ type StreamInfo struct {
 
 // Activity is what the PC is doing for a phone right now.
 type Activity struct {
-	Phone   *PhoneInfo `json:"phone"`
-	Mic     StreamInfo `json:"mic"`
-	Speaker StreamInfo `json:"speaker"`
+	Phone   *PhoneInfo   `json:"phone"`
+	Mic     StreamInfo   `json:"mic"`
+	Speaker StreamInfo   `json:"speaker"`
+	Video   video.Status `json:"video"`
 }
+
+// Video is where the camera frames of the connected phone arrive (docs/protocol.md, section 8).
+func (s *Server) Video() *video.Hub { return s.video }
 
 // Activity reports the connected phone and its running streams, if any.
 func (s *Server) Activity() Activity {
@@ -85,7 +92,7 @@ func (s *Server) Activity() Activity {
 	defer se.mu.Unlock()
 	a := Activity{Phone: &PhoneInfo{
 		ID: se.dev.ID, Name: se.dev.Name, Platform: se.dev.Platform, From: se.from, Since: se.since,
-	}}
+	}, Video: s.video.Status()}
 	if se.sink != nil {
 		a.Mic = StreamInfo{On: true, Device: se.micDev.Name}
 	}
@@ -124,7 +131,7 @@ func (s *Server) Disconnect() bool {
 }
 
 func New(opt Options, st *store.Store, pm *pairing.Manager, be audio.Backend, log *slog.Logger) *Server {
-	return &Server{opt: opt, store: st, pair: pm, audio: be, log: log}
+	return &Server{opt: opt, store: st, pair: pm, audio: be, log: log, video: video.NewHub()}
 }
 
 // Serve blocks until ctx is cancelled.
@@ -136,6 +143,7 @@ func (s *Server) Serve(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc(proto.InfoPath, s.handleInfo)
 	mux.HandleFunc(proto.WSPath, s.handleWS)
+	mux.HandleFunc(proto.VideoPath, s.handleVideoWS)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 
 	go func() {

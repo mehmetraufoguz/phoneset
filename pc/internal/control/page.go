@@ -65,3 +65,44 @@ setInterval(tick, 1000); tick();
 </script>
 </body>
 </html>`
+
+// videoHTML shows the camera of the connected phone and what the PC measures of it.
+const videoHTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone camera - phoneset</title>
+<link rel="icon" href="/logo.png?t=__TOKEN__">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; flex-direction:column; background:#0b0d12; color:#eef1f7;
+         font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #view { flex:1; min-height:0; display:grid; place-items:center; }
+  #view img { max-width:100%; max-height:100%; display:block; }
+  #info { padding:8px 14px; color:#9aa3b5; font-variant-numeric:tabular-nums; text-align:center; }
+  #wait { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; color:#9aa3b5; }
+</style>
+</head>
+<body>
+<div id="view"><img id="v" src="/video.mjpg?t=__TOKEN__" alt="Phone camera"></div>
+<div id="wait">Waiting for the phone's camera…</div>
+<div id="info">&nbsp;</div>
+<script>
+  const info = document.getElementById("info"), wait = document.getElementById("wait");
+  async function poll() {
+    try {
+      const r = await fetch("/api/status?t=__TOKEN__", { cache: "no-store" });
+      const v = (await r.json()).video;
+      wait.style.display = v.on ? "none" : "grid";
+      info.textContent = v.on
+        ? v.width + "×" + v.height + "  ·  " + v.fps.toFixed(1) + " fps  ·  " + v.kBps.toFixed(0) + " kB/s  ·  " + (v.camera || "") + " camera"
+        : "camera off";
+    } catch { info.textContent = "phoneset isn't answering"; }
+  }
+  poll(); setInterval(poll, 1000);
+</script>
+</body>
+</html>
+`

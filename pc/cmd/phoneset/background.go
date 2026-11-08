@@ -149,6 +149,11 @@ func printStatus(c *control.Client, s app.Snapshot) {
 			term.Green("connected")+term.Dim(fmt.Sprintf(" %s ago from %s", since(s.Phone.Since), s.Phone.From)))
 		fmt.Printf("    microphone     %s\n", streamText(s.Mic.On, "→ "+s.Mic.Device))
 		fmt.Printf("    headphones     %s\n", streamText(s.Speaker.On, "← "+s.Speaker.Device))
+		if s.Video.On {
+			fmt.Printf("    camera         %s\n", streamText(true, fmt.Sprintf("%s camera, %d×%d, %.0f fps, %.0f kB/s, %d viewer(s)",
+				s.Video.Camera, s.Video.Width, s.Video.Height, s.Video.FPS, s.Video.KBps, s.Video.Viewers)))
+			fmt.Printf("    view           %s\n", c.VideoURL())
+		}
 	}
 	var names []string
 	for _, p := range s.Phones {
@@ -178,6 +183,29 @@ func since(t time.Time) string {
 		return d.String()
 	}
 	return d.Round(time.Minute).String()
+}
+
+// cmdVideo prints where the phone's camera can be seen, and opens it in the browser on request.
+func cmdVideo(args []string) error {
+	fs := flag.NewFlagSet("video", flag.ExitOnError)
+	dir := fs.String("config-dir", "", "")
+	open := fs.Bool("open", false, "")
+	raw := fs.Bool("mjpeg", false, "")
+	_ = fs.Parse(args)
+
+	c, err := control.Connect(configDir(*dir))
+	if err != nil {
+		return errNotRunning
+	}
+	if *raw {
+		fmt.Println(c.MJPEGURL())
+		return nil
+	}
+	if *open {
+		return system.OpenURL(c.VideoURL())
+	}
+	fmt.Println(c.VideoURL())
+	return nil
 }
 
 func cmdPair(args []string) error {

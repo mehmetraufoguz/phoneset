@@ -39,6 +39,8 @@ type session struct {
 	micDev audio.Device
 	src    audio.Source
 	spkDev audio.Device
+	vc     *videoConn // the phone's video connection, if it has one (video.go)
+	closed bool       // the session is over; no video connection may attach
 }
 
 func newSession(srv *Server, ch *secure.Channel, dev store.Device, from string, cancel context.CancelFunc) *session {
@@ -133,6 +135,11 @@ func (se *session) ready() proto.Ready {
 		r.Speaker.Reason = "No playback device found."
 	default:
 		r.Speaker = proto.Endpoint{Available: true, Device: dev.Name}
+	}
+	if opt.NoVideo {
+		r.Video = &proto.VideoCaps{Reason: "Turned off on the PC (--no-video)."}
+	} else {
+		r.Video = &proto.VideoCaps{Available: true, Path: proto.VideoPath, MaxFrameBytes: proto.MaxVideoFrame}
 	}
 	return r
 }
@@ -256,6 +263,10 @@ func (se *session) stopAll() {
 	defer se.mu.Unlock()
 	se.stopMicLocked()
 	se.stopSpeakerLocked()
+	se.closed = true
+	if se.vc != nil {
+		se.vc.cancel() // the camera has no use for a phone that left
+	}
 }
 
 // speakerFailed is called from the capture goroutine when the device went away.

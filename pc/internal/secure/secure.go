@@ -111,6 +111,11 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
+// SetMaxMessage changes the size of the largest message the channel reads. It starts small (a stranger
+// who has not authenticated yet can't make the PC buffer much); the session raises it for video frames.
+// Call it before the next Recv.
+func (c *Channel) SetMaxMessage(n int64) { c.ws.SetReadLimit(n) }
+
 // Transcript binds proofs to this particular handshake.
 func (c *Channel) Transcript() []byte { return c.transcript[:] }
 

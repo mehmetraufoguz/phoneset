@@ -37,6 +37,7 @@ func cmdServe(args []string) error {
 	spkDev := fs.String("speaker-device", "", "")
 	noMic := fs.Bool("no-mic", false, "")
 	noSpk := fs.Bool("no-speaker", false, "")
+	noVideo := fs.Bool("no-video", false, "")
 	forcePair := fs.Bool("pair", false, "")
 	dir := fs.String("config-dir", "", "")
 	verbose := fs.Bool("verbose", false, "")
@@ -89,7 +90,7 @@ func cmdServe(args []string) error {
 	backend := audio.NewBackend()
 	pm := pairing.NewManager()
 	srv := server.New(server.Options{
-		Port: *port, MicSelector: *micDev, SpeakerSelector: *spkDev, NoMic: *noMic, NoSpeaker: *noSpk,
+		Port: *port, MicSelector: *micDev, SpeakerSelector: *spkDev, NoMic: *noMic, NoSpeaker: *noSpk, NoVideo: *noVideo,
 	}, st, pm, backend, log)
 	application := app.New(version, *port, st, pm, srv, backend, log)
 	build := currentBuild()
