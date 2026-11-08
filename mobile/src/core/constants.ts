@@ -15,7 +15,19 @@ export const MIC_CHANNELS = 1
 export const SPEAKER_CHANNELS = 2
 
 /** First plaintext byte of every message inside the encrypted channel. */
-export const Frame = { control: 0x01, mic: 0x02, speaker: 0x03 } as const
+export const Frame = { control: 0x01, mic: 0x02, speaker: 0x03, video: 0x04 } as const
 
 /** Audio messages carry a big-endian u32 sequence number before the PCM. */
 export const AUDIO_HEADER_LEN = 4
+
+/** The camera is on a connection of its own (docs/protocol.md, section 8). */
+export const VIDEO_PATH = "/v2/video"
+
+/**
+ * What is asked of the camera: 1280 x 720 at 30 frames a second, JPEG quality 70. The camera sends fewer
+ * when the link is slow: a frame is only made when the one before it has been acknowledged.
+ */
+export const VIDEO = { width: 1280, height: 720, fps: 30, quality: 70 } as const
+
+/** Frames sent and not yet acknowledged: at most this many, and at most this many bytes. */
+export const VIDEO_WINDOW = { frames: 2, bytes: 256 * 1024 } as const

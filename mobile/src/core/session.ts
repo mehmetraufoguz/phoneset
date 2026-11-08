@@ -11,8 +11,9 @@ import {
 } from "effect"
 import { AudioIO, type Player } from "./audio"
 import { fromBase64, toBase64, u32be, utf8 } from "./bytes"
+import { CameraIO, type Facing } from "./camera"
 import { type Channel, openChannel } from "./channel"
-import { AUDIO_HEADER_LEN, Frame, WS_PATH } from "./constants"
+import { AUDIO_HEADER_LEN, Frame, VIDEO_PATH, WS_PATH } from "./constants"
 import { Crypto, equal, protocolOf } from "./crypto"
 import { Discovery, firstReachable } from "./discovery"
 import {
@@ -31,10 +32,12 @@ import {
   encodeClientMessage,
   type ReadyMessage,
   type ServerMessage,
-  type StatsMessage
+  type StatsMessage,
+  type VideoOffer
 } from "./protocol"
 import { SocketFactory } from "./socket"
 import { type PairedPc, PairedPcs, type PhoneIdentity } from "./storage"
+import { runVideo, type VideoReport } from "./videoChannel"
 
 export interface StreamStatus {
   readonly on: boolean
@@ -46,6 +49,21 @@ export interface StreamStatus {
   readonly error: string | null
 }
 
+/**
+ * The camera. It has a connection of its own (docs/protocol.md, section 8), is off until the user turns
+ * it on, and nothing else in the session depends on it.
+ */
+export interface VideoStatus {
+  readonly on: boolean
+  /** A request is in flight. */
+  readonly busy: boolean
+  /** Why the camera can't be used here (the PC has no video, this phone can't send it), or null. */
+  readonly unavailable: string | null
+  readonly camera: Facing
+  readonly error: string | null
+  readonly report: VideoReport | null
+}
+
 export type SessionState =
   | { readonly _tag: "Idle" }
   | { readonly _tag: "Connecting"; readonly pcName: string; readonly step: string }
@@ -54,6 +72,7 @@ export type SessionState =
       readonly pc: { readonly id: string; readonly name: string }
       readonly mic: StreamStatus
       readonly speaker: StreamStatus
+      readonly video: VideoStatus
       readonly rttMs: number | null
       readonly micLevel: number
       readonly stats: StatsMessage | null
@@ -79,12 +98,22 @@ export type Target =
 interface StreamRequest {
   readonly mic?: boolean
   readonly speaker?: boolean
+  /** Handled by the video connection, never sent on this one. */
+  readonly video?: boolean
+  readonly camera?: Facing
 }
 
 interface Route {
   readonly host: string
   readonly port: number
   readonly name: string
+}
+
+const nothingOn: Required<StreamRequest> = {
+  mic: false,
+  speaker: false,
+  video: false,
+  camera: "back"
 }
 
 const MAX_RECONNECTS = 6
@@ -108,6 +137,9 @@ export class Session extends Context.Service<
     readonly stop: Effect.Effect<void>
     readonly setMic: (on: boolean) => Effect.Effect<void>
     readonly setSpeaker: (on: boolean) => Effect.Effect<void>
+    readonly setVideo: (on: boolean) => Effect.Effect<void>
+    /** Picks the camera; while the camera is on it switches. */
+    readonly setCamera: (facing: Facing) => Effect.Effect<void>
     /** Running streams are stopped and started again so the audio session can take the new mode. */
     readonly setVoiceProcessing: (on: boolean) => Effect.Effect<void>
   }
@@ -119,6 +151,7 @@ function makeSession() {
   return Effect.gen(function* () {
     const pcs = yield* PairedPcs
     const audio = yield* AudioIO
+    const camera = yield* CameraIO
     const discovery = yield* Discovery
     const sockets = yield* SocketFactory
     const crypto = yield* Crypto
@@ -128,7 +161,7 @@ function makeSession() {
     const commands = yield* Queue.unbounded<StreamRequest>()
     const connection = yield* FiberHandle.make<void, never>()
     const lastTarget = yield* Ref.make<Target | null>(null)
-    const desired = yield* Ref.make<Required<StreamRequest>>({ mic: false, speaker: false })
+    const desired = yield* Ref.make<Required<StreamRequest>>(nothingOn)
     const voiceProcessing = yield* Ref.make(false)
 
     const setState = (s: SessionState) => SubscriptionRef.set(state, s)
@@ -289,10 +322,26 @@ function makeSession() {
       error: e.available ? null : (e.reason ?? null)
     })
 
-    const serve = (channel: Channel, pc: PairedPc, ready: ReadyMessage) =>
+    const unavailableVideo = (offer: VideoOffer | undefined): string | null =>
+      offer === undefined
+        ? "This PC can't receive video. Update phoneset on the PC."
+        : !offer.available
+          ? (offer.reason ?? "Video is off on this PC.")
+          : camera.available
+            ? null
+            : "This phone can't send its camera yet."
+
+    const serve = (
+      channel: Channel,
+      pc: PairedPc,
+      ready: ReadyMessage,
+      route: Route,
+      me: PhoneIdentity
+    ) =>
       Effect.gen(function* () {
         const micFiber = yield* FiberHandle.make<void, never>()
         const playerFiber = yield* FiberHandle.make<void, never>()
+        const videoFiber = yield* FiberHandle.make<void, never>()
         const player = yield* Ref.make<Player | null>(null)
         let micSeq = 0
         let pingN = 0
@@ -302,6 +351,14 @@ function makeSession() {
           pc: { id: pc.id, name: pc.name },
           mic: toStatus(ready.mic),
           speaker: toStatus(ready.speaker),
+          video: {
+            on: false,
+            busy: false,
+            unavailable: unavailableVideo(ready.video),
+            camera: (yield* Ref.get(desired)).camera,
+            error: null,
+            report: null
+          },
           rttMs: null,
           micLevel: 0,
           stats: null,
@@ -377,6 +434,72 @@ function makeSession() {
             }
           })
 
+        // ---- the camera: its own connection, see core/videoChannel.ts
+
+        const setVideoStatus = (patch: Partial<VideoStatus>) =>
+          whenConnected((s) => ({ ...s, video: { ...s.video, ...patch } }))
+
+        const videoFailed = (message: string) =>
+          setVideoStatus({ on: false, busy: false, error: message, report: null }).pipe(
+            Effect.andThen(Ref.update(desired, (d) => ({ ...d, video: false })))
+          )
+
+        const videoRun = (facing: Facing) =>
+          Effect.gen(function* () {
+            const token = yield* Effect.try({
+              try: () => fromBase64(pc.token),
+              catch: () =>
+                new ProtocolError({ message: "The saved pairing is damaged. Pair again." })
+            })
+            return yield* Effect.scoped(
+              runVideo(
+                {
+                  url: `ws://${route.host}:${route.port}${ready.video?.path ?? VIDEO_PATH}`,
+                  deviceId: me.deviceId,
+                  token,
+                  facing
+                },
+                (report) => setVideoStatus({ on: true, busy: false, report })
+              )
+            )
+          }).pipe(
+            Effect.provideService(SocketFactory, sockets),
+            Effect.provideService(Crypto, crypto),
+            Effect.provideService(CameraIO, camera),
+            Effect.catch((e) => videoFailed(e.message)),
+            Effect.catchDefect((defect) =>
+              videoFailed(
+                `The camera stopped: ${defect instanceof Error ? defect.message : String(defect)}`
+              )
+            )
+          )
+
+        const startVideo = (facing: Facing) =>
+          Effect.gen(function* () {
+            // If video is ever sold, the check that allows it belongs here: refuse with a message
+            // (videoFailed) before the camera or the connection is touched.
+            const permitted = yield* camera.ensurePermission.pipe(
+              Effect.as(true),
+              Effect.catch((e) => videoFailed(e.message).pipe(Effect.as(false)))
+            )
+            if (!permitted) return
+            yield* setVideoStatus({ busy: true, error: null, camera: facing })
+            yield* FiberHandle.run(videoFiber, videoRun(facing))
+          })
+
+        const stopVideo = FiberHandle.clear(videoFiber).pipe(
+          Effect.andThen(setVideoStatus({ on: false, busy: false, report: null }))
+        )
+
+        const videoRequest = (req: StreamRequest) =>
+          Effect.gen(function* () {
+            const d = yield* Ref.get(desired)
+            if (req.video === false) return yield* stopVideo
+            if (d.video && (req.video === true || req.camera !== undefined))
+              return yield* startVideo(d.camera)
+            if (req.camera !== undefined) yield* setVideoStatus({ camera: req.camera })
+          })
+
         const handle = (m: ServerMessage) => {
           switch (m.t) {
             case "stream":
@@ -392,8 +515,15 @@ function makeSession() {
           }
         }
 
-        const request = (req: StreamRequest) =>
+        const request = (all: StreamRequest) =>
           Effect.gen(function* () {
+            const { video, camera: facing, ...req } = all
+            if (video !== undefined || facing !== undefined)
+              yield* videoRequest({
+                ...(video !== undefined ? { video } : {}),
+                ...(facing !== undefined ? { camera: facing } : {})
+              })
+            if (req.mic === undefined && req.speaker === undefined) return
             if (req.mic !== undefined) {
               if (req.mic) {
                 const permitted = yield* audio.ensureMicPermission.pipe(
@@ -412,10 +542,11 @@ function makeSession() {
 
         // Streams the user had on before a reconnect come back on their own.
         const wanted = yield* Ref.get(desired)
-        if (wanted.mic || wanted.speaker) {
+        if (wanted.mic || wanted.speaker || wanted.video) {
           yield* request({
             ...(wanted.mic ? { mic: true } : {}),
-            ...(wanted.speaker ? { speaker: true } : {})
+            ...(wanted.speaker ? { speaker: true } : {}),
+            ...(wanted.video ? { video: true, camera: wanted.camera } : {})
           })
         }
 
@@ -492,7 +623,7 @@ function makeSession() {
           const ready = yield* awaitReady(channel)
           yield* audio.configure({ voiceProcessing: yield* Ref.get(voiceProcessing) })
           yield* Ref.set(connectedOnce, true)
-          return yield* serve(channel, pc, ready)
+          return yield* serve(channel, pc, ready, route, me)
         })
       )
 
@@ -537,7 +668,7 @@ function makeSession() {
         yield* Ref.set(lastTarget, target)
         const targetRef = yield* Ref.make(target)
         const connectedOnce = yield* Ref.make(false)
-        yield* Ref.set(desired, { mic: false, speaker: false })
+        yield* Ref.set(desired, nothingOn)
         yield* connecting(target, "Starting")
         yield* FiberHandle.run(connection, supervise(targetRef, connectedOnce, 0))
       })
@@ -563,6 +694,8 @@ function makeSession() {
       stop,
       setMic: (on) => request({ mic: on }).pipe(Effect.asVoid),
       setSpeaker: (on) => request({ speaker: on }).pipe(Effect.asVoid),
+      setVideo: (on) => request({ video: on }).pipe(Effect.asVoid),
+      setCamera: (facing) => request({ camera: facing }).pipe(Effect.asVoid),
       setVoiceProcessing: (on) =>
         Effect.gen(function* () {
           yield* Ref.set(voiceProcessing, on)

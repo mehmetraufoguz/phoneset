@@ -5,6 +5,7 @@ import { SocketFactory } from "./core/socket"
 import { PairedPcs } from "./core/storage"
 import { AudioLive } from "./platform/audio"
 import { DeviceInfoLive, EntropyLive, KeyValueLive } from "./platform/basics"
+import { CameraLive } from "./platform/camera"
 import { CryptoLive } from "./platform/crypto"
 import { DiscoveryLive } from "./platform/discovery"
 import { PresenceLive } from "./platform/presence"
@@ -16,6 +17,7 @@ const PlatformLive = Layer.mergeAll(
   DeviceInfoLive,
   DiscoveryLive,
   AudioLive,
+  CameraLive,
   PresenceLive,
   SocketFactory.layer
 )

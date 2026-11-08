@@ -24,6 +24,11 @@ export class AudioError extends Schema.TaggedError<AudioError>()("AudioError", {
   message: Schema.String
 }) {}
 
+/** The camera is missing, refused, or stopped. It ends the video, not the connection. */
+export class CameraError extends Schema.TaggedError<CameraError>()("CameraError", {
+  message: Schema.String
+}) {}
+
 export class DiscoveryError extends Schema.TaggedError<DiscoveryError>()("DiscoveryError", {
   message: Schema.String
 }) {}

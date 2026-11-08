@@ -20,7 +20,16 @@ const Ready = Schema.Struct({
     speakerChannels: Schema.Number
   }),
   mic: Endpoint,
-  speaker: Endpoint
+  speaker: Endpoint,
+  /** Absent on a PC that has no video. */
+  video: Schema.optionalKey(
+    Schema.Struct({
+      available: Schema.Boolean,
+      reason: Schema.optionalKey(Schema.String),
+      path: Schema.optionalKey(Schema.String),
+      maxFrameBytes: Schema.optionalKey(Schema.Number)
+    })
+  )
 })
 
 const StreamState = Schema.Struct({
@@ -70,24 +79,50 @@ export const ServerMessage = Schema.Union([
   Authed
 ])
 export type ServerMessage = typeof ServerMessage.Type
+
+// The video connection has its own, smaller set of messages. It is decoded apart from the one above so
+// that nothing about video can reach the audio connection's parser (an unknown tag there ends it).
+
+const VideoState = Schema.Struct({
+  t: Schema.Literal("video"),
+  on: Schema.Boolean,
+  camera: Schema.optionalKey(Schema.String),
+  error: Schema.optionalKey(Schema.String)
+})
+const VideoAck = Schema.Struct({ t: Schema.Literal("vack"), seq: Schema.Number })
+const VideoStats = Schema.Struct({
+  t: Schema.Literal("vstats"),
+  frames: Schema.Number,
+  bytes: Schema.Number,
+  viewers: Schema.Number
+})
+
+export const VideoServerMessage = Schema.Union([Authed, Rejected, VideoState, VideoAck, VideoStats])
+export type VideoServerMessage = typeof VideoServerMessage.Type
 export type ReadyMessage = typeof Ready.Type
 export type StreamMessage = typeof StreamState.Type
 export type StatsMessage = typeof Stats.Type
+export type VideoOffer = NonNullable<ReadyMessage["video"]>
 
-const decode = Schema.decodeUnknownEffect(ServerMessage)
-
-export const decodeServerMessage = (body: Uint8Array) =>
+const parseJson = (body: Uint8Array) =>
   Effect.try({
     try: () => JSON.parse(fromUtf8(body)) as unknown,
     catch: () => new ProtocolError({ message: "The PC sent a message that isn't JSON." })
-  }).pipe(
-    Effect.flatMap(decode),
-    Effect.mapError((e) =>
-      e instanceof ProtocolError
-        ? e
-        : new ProtocolError({ message: "The PC sent an unexpected message." })
-    )
-  )
+  })
+
+const unexpected = (e: unknown) =>
+  e instanceof ProtocolError
+    ? e
+    : new ProtocolError({ message: "The PC sent an unexpected message." })
+
+const decode = Schema.decodeUnknownEffect(ServerMessage)
+const decodeVideo = Schema.decodeUnknownEffect(VideoServerMessage)
+
+export const decodeServerMessage = (body: Uint8Array) =>
+  parseJson(body).pipe(Effect.flatMap(decode), Effect.mapError(unexpected))
+
+export const decodeVideoMessage = (body: Uint8Array) =>
+  parseJson(body).pipe(Effect.flatMap(decodeVideo), Effect.mapError(unexpected))
 
 // Phone to PC. Plain objects: we build these, so there is nothing to validate.
 
@@ -104,6 +139,8 @@ export type ClientMessage =
   | { readonly t: "stream"; readonly mic?: boolean; readonly speaker?: boolean }
   | { readonly t: "ping"; readonly n: number; readonly c: number }
   | { readonly t: "bye" }
+  // Only on the video connection:
+  | { readonly t: "video"; readonly on: boolean; readonly camera?: "back" | "front" }
 
 export const encodeClientMessage = (message: ClientMessage): Uint8Array =>
   utf8(JSON.stringify(message))

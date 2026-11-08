@@ -2,7 +2,7 @@ import { Button, FieldGroup, Host, Row, Slider, Spacer, Switch, Text } from "@ex
 import { useKeepAwake } from "expo-keep-awake"
 import { useRouter } from "expo-router"
 import { Platform } from "react-native"
-import { Session, type SessionState, type StreamStatus } from "../core/session"
+import { Session, type SessionState, type StreamStatus, type VideoStatus } from "../core/session"
 import { act, BRAND, useColors, useSessionState } from "../ui/hooks"
 
 export default function SessionScreen() {
@@ -44,6 +44,23 @@ export default function SessionScreen() {
       </FieldGroup>
     </Host>
   )
+}
+
+function videoDetail(v: VideoStatus): string {
+  if (v.error) return v.error
+  if (v.unavailable) return v.unavailable
+  if (v.busy) return "Starting…"
+  const r = v.report
+  if (!v.on || r === null)
+    return "Off. The picture goes to your PC (run `phoneset video` there). Keep this screen open."
+  const size =
+    r.camera === null || r.camera.width === 0 ? "" : `${r.camera.width}×${r.camera.height}  ·  `
+  const ack =
+    r.ackMs === null || r.sendMs === null
+      ? ""
+      : `  ·  ack ${Math.round(r.ackMs)} ms  ·  send ${Math.round(r.sendMs)} ms`
+  const viewers = r.viewers === 1 ? "1 viewer" : `${r.viewers} viewers`
+  return `${size}${r.fps.toFixed(0)} fps  ·  ${(r.kBps / 1000).toFixed(1)} MB/s${ack}  ·  ${viewers}`
 }
 
 // A plain function, not a component: FieldGroup only lays out Sections that are its direct children
@@ -112,6 +129,34 @@ function connectedSections(
         >
           {detail(state.speaker, `Playing ${state.speaker.device ?? "PC audio"}`, "Off")}
         </Text>
+      </FieldGroup.Section>
+
+      <FieldGroup.Section title="Camera (experimental)">
+        <Switch
+          label="Camera as a webcam"
+          value={state.video.on || state.video.busy}
+          disabled={state.video.busy || state.video.unavailable !== null}
+          onValueChange={(on) => act(Session.use((s) => s.setVideo(on)))}
+        />
+        <Text
+          textStyle={{ fontSize: 13, color: state.video.error ? colors.danger : colors.secondary }}
+        >
+          {videoDetail(state.video)}
+        </Text>
+        {state.video.unavailable === null ? (
+          <Row alignment="center" spacing={8}>
+            <Button
+              variant={state.video.camera === "back" ? undefined : "outlined"}
+              label="Back"
+              onPress={() => act(Session.use((s) => s.setCamera("back")))}
+            />
+            <Button
+              variant={state.video.camera === "front" ? undefined : "outlined"}
+              label="Front"
+              onPress={() => act(Session.use((s) => s.setCamera("front")))}
+            />
+          </Row>
+        ) : null}
       </FieldGroup.Section>
 
       <FieldGroup.Section title="Sound">
