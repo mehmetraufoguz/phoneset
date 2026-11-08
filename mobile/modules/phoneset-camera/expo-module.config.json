@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PhonesetCameraModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.phonesetcamera.PhonesetCameraModule"]
+  }
+}

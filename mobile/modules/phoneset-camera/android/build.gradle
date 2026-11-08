@@ -1,0 +1,29 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.phonesetcamera'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.phonesetcamera"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+// CameraX 1.6.0 needs the real listenablefuture at compile time, and the React Native Gradle plugin
+// pulls in a Guava that replaces it with an empty jar (the same override expo-camera carries).
+configurations.configureEach {
+  resolutionStrategy.force "com.google.guava:listenablefuture:1.0"
+}
+
+dependencies {
+  // The version expo-camera already uses, so the app carries one CameraX.
+  def camerax_version = "1.6.0"
+  implementation "androidx.camera:camera-core:${camerax_version}"
+  implementation "androidx.camera:camera-camera2:${camerax_version}"
+  implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+}
