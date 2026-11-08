@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect"
 import { fromUtf8, utf8 } from "./bytes"
+import type { VideoMode } from "./camera"
 import { ProtocolError } from "./errors"
 
 // Control messages are JSON inside the encrypted channel.
@@ -27,7 +28,10 @@ const Ready = Schema.Struct({
       available: Schema.Boolean,
       reason: Schema.optionalKey(Schema.String),
       path: Schema.optionalKey(Schema.String),
-      maxFrameBytes: Schema.optionalKey(Schema.Number)
+      maxFrameBytes: Schema.optionalKey(Schema.Number),
+      /** The codecs the PC accepts, and optional extras it supports. */
+      codecs: Schema.optionalKey(Schema.Array(Schema.String)),
+      features: Schema.optionalKey(Schema.Array(Schema.String))
     })
   )
 })
@@ -83,10 +87,18 @@ export type ServerMessage = typeof ServerMessage.Type
 // The video connection has its own, smaller set of messages. It is decoded apart from the one above so
 // that nothing about video can reach the audio connection's parser (an unknown tag there ends it).
 
+const Mode = Schema.Struct({
+  codec: Schema.String,
+  width: Schema.Number,
+  height: Schema.Number,
+  fps: Schema.Number
+})
+
 const VideoState = Schema.Struct({
   t: Schema.Literal("video"),
   on: Schema.Boolean,
   camera: Schema.optionalKey(Schema.String),
+  mode: Schema.optionalKey(Mode),
   error: Schema.optionalKey(Schema.String)
 })
 const VideoAck = Schema.Struct({ t: Schema.Literal("vack"), seq: Schema.Number })
@@ -140,7 +152,14 @@ export type ClientMessage =
   | { readonly t: "ping"; readonly n: number; readonly c: number }
   | { readonly t: "bye" }
   // Only on the video connection:
-  | { readonly t: "video"; readonly on: boolean; readonly camera?: "back" | "front" }
+  | {
+      readonly t: "video"
+      readonly on: boolean
+      readonly camera?: "back" | "front"
+      /** What the phone is about to send, and everything it is willing to send. */
+      readonly mode?: VideoMode
+      readonly modes?: ReadonlyArray<VideoMode>
+    }
 
 export const encodeClientMessage = (message: ClientMessage): Uint8Array =>
   utf8(JSON.stringify(message))

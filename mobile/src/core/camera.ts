@@ -3,6 +3,23 @@ import type { CameraError } from "./errors"
 
 export type Facing = "back" | "front"
 
+/** A codec, a size and a frame rate (docs/protocol.md, section 8.2). The protocol names no tiers. */
+export interface VideoMode {
+  readonly codec: string
+  readonly width: number
+  readonly height: number
+  readonly fps: number
+}
+
+/** What a camera says it can deliver: each size with the highest frame rate it lists for it. */
+export interface CameraCapabilities {
+  readonly sizes: ReadonlyArray<{
+    readonly width: number
+    readonly height: number
+    readonly maxFps: number
+  }>
+}
+
 /** What the camera side measured since it started (for the diagnostics line). */
 export interface CameraStats {
   readonly width: number
@@ -32,7 +49,12 @@ export class CameraIO extends Context.Service<
     /** False where the native module is missing or the phone has no camera. */
     readonly available: boolean
     readonly ensurePermission: Effect.Effect<void, CameraError>
-    /** Opens the camera; closing the scope stops it. */
-    readonly open: (facing: Facing) => Effect.Effect<CameraSession, CameraError, Scope.Scope>
+    /** Read from the system, never assumed. */
+    readonly capabilities: (facing: Facing) => Effect.Effect<CameraCapabilities, CameraError>
+    /** Opens the camera for a mode; closing the scope stops it. */
+    readonly open: (
+      facing: Facing,
+      mode: VideoMode
+    ) => Effect.Effect<CameraSession, CameraError, Scope.Scope>
   }
 >()("phoneset/CameraIO") {}

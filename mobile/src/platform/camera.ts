@@ -1,8 +1,8 @@
 import { Effect, Layer } from "effect"
 import { requireOptionalNativeModule } from "expo"
 import { Camera } from "expo-camera"
-import { CameraIO, type CameraStats } from "../core/camera"
-import { VIDEO } from "../core/constants"
+import { type CameraCapabilities, CameraIO, type CameraStats } from "../core/camera"
+import { VIDEO_QUALITY } from "../core/constants"
 import { CameraError } from "../core/errors"
 
 // The native module in modules/phoneset-camera: CameraX on Android, AVFoundation on iOS. Where it is
@@ -11,6 +11,7 @@ interface PhonesetCameraModule {
   isAvailable(): boolean
   start(facing: string, width: number, height: number, fps: number, quality: number): Promise<void>
   nextFrame(): Promise<unknown>
+  capabilities(facing: string): CameraCapabilities
   stop(): void
   stats(): Record<string, number>
 }
@@ -40,14 +41,19 @@ const ensurePermission = Effect.tryPromise({
 export const CameraLive = Layer.succeed(CameraIO, {
   available: native?.isAvailable() === true,
   ensurePermission,
-  open: (facing) =>
+  capabilities: (facing) =>
+    Effect.try({
+      try: () => (native as PhonesetCameraModule).capabilities(facing),
+      catch: failure("Couldn't read what the camera can do.")
+    }),
+  open: (facing, mode) =>
     Effect.gen(function* () {
       const module = native
       if (module === null)
         return yield* new CameraError({ message: "This phone can't send its camera yet." })
       yield* Effect.acquireRelease(
         Effect.tryPromise({
-          try: () => module.start(facing, VIDEO.width, VIDEO.height, VIDEO.fps, VIDEO.quality),
+          try: () => module.start(facing, mode.width, mode.height, mode.fps, VIDEO_QUALITY),
           catch: failure("The camera didn't start.")
         }),
         () => Effect.sync(() => module.stop())

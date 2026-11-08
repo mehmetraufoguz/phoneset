@@ -10,11 +10,14 @@ struct CameraFailure: Error {
 /// the frame rate allows it, so the work follows what is actually sent.
 ///
 /// A frame is the message body of docs/protocol.md type 0x04: seq (u32), capture time in ms (u32),
-/// width (u16), height (u16), then the JPEG. The picture is upright and not mirrored.
+/// codec (u8), flags (u8), width (u16), height (u16), then the JPEG. The picture is upright and not
+/// mirrored.
 final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
   typealias Callback = (Data?, String?) -> Void
 
-  private static let headerLength = 12
+  private static let headerLength = 14
+  private static let codecJPEG: UInt8 = 1
+  private static let flagKey: UInt8 = 1
 
   private let session = AVCaptureSession()
   private let queue = DispatchQueue(label: "phoneset.camera")
@@ -155,6 +158,8 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     var frame = Data(capacity: Self.headerLength + jpeg.count)
     frame.append(contentsOf: Self.bigEndian(number))
     frame.append(contentsOf: Self.bigEndian(captured))
+    frame.append(Self.codecJPEG)
+    frame.append(Self.flagKey)  // every JPEG can be decoded on its own
     frame.append(contentsOf: Self.bigEndian(UInt16(truncatingIfNeeded: w)))
     frame.append(contentsOf: Self.bigEndian(UInt16(truncatingIfNeeded: h)))
     frame.append(jpeg)
@@ -184,6 +189,27 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
       "captureLagMs": -1,
       "encoded": Double(encoded),
     ]
+  }
+
+  /// The sizes the camera reports it can deliver, each with the highest frame rate it lists for it.
+  static func capabilities(facing: String) -> [String: Any] {
+    let position: AVCaptureDevice.Position = facing == "front" ? .front : .back
+    guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
+      return ["sizes": [[String: Int]](), "id": ""]
+    }
+    var best: [String: Int] = [:]  // "WxH" -> max fps
+    var sizes: [String: (Int, Int)] = [:]
+    for format in device.formats {
+      let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+      let key = "\(dimensions.width)x\(dimensions.height)"
+      let fps = Int(format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0)
+      best[key] = max(best[key] ?? 0, fps)
+      sizes[key] = (Int(dimensions.width), Int(dimensions.height))
+    }
+    let list: [[String: Int]] = sizes.map { key, size in
+      ["width": size.0, "height": size.1, "maxFps": best[key] ?? 0]
+    }
+    return ["id": device.uniqueID, "sizes": list]
   }
 
   private static func bigEndian<T: FixedWidthInteger>(_ value: T) -> [UInt8] {

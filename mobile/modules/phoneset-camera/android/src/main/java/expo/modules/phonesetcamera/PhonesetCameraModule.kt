@@ -43,6 +43,11 @@ class PhonesetCameraModule : Module() {
       }
     }
 
+    // What this phone's camera reports it can deliver, and which video encoders the system lists.
+    Function("capabilities") { facing: String -> Capabilities.camera(context, facing) }
+
+    Function("encoders") { Capabilities.encoders() }
+
     Function("stop") { source.stop() }
 
     Function("stats") { source.stats() }

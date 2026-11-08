@@ -37,6 +37,11 @@ public class PhonesetCameraModule: Module {
       }
     }
 
+    // What this phone's camera reports it can deliver.
+    Function("capabilities") { (facing: String) -> [String: Any] in
+      PhonesetCameraCore.capabilities(facing: facing)
+    }
+
     Function("stop") {
       self.camera.stop()
     }

@@ -457,7 +457,8 @@ function makeSession() {
                   url: `ws://${route.host}:${route.port}${ready.video?.path ?? VIDEO_PATH}`,
                   deviceId: me.deviceId,
                   token,
-                  facing
+                  facing,
+                  codecs: ready.video?.codecs ?? ["jpeg"]
                 },
                 (report) => setVideoStatus({ on: true, busy: false, report })
               )

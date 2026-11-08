@@ -1,10 +1,16 @@
 import { Effect, Fiber } from "effect"
 import { fromBase64, toBase64, utf8 } from "./bytes"
-import { CameraIO, type CameraSession, type CameraStats, type Facing } from "./camera"
+import {
+  CameraIO,
+  type CameraSession,
+  type CameraStats,
+  type Facing,
+  type VideoMode
+} from "./camera"
 import { type Channel, openChannel } from "./channel"
 import { Frame, VIDEO_WINDOW } from "./constants"
 import { Crypto, equal, protocolOf } from "./crypto"
-import { AuthError, ProtocolError } from "./errors"
+import { AuthError, CameraError, ProtocolError } from "./errors"
 import {
   type ClientMessage,
   decodeVideoMessage,
@@ -12,6 +18,7 @@ import {
   type VideoServerMessage
 } from "./protocol"
 import { SocketFactory } from "./socket"
+import { modesFor, pickMode } from "./videoModes"
 
 // Everything about sending the phone's camera lives here and in core/camera.ts. Video has a connection
 // of its own (docs/protocol.md, section 8), so none of this touches the audio connection, and a phone
@@ -35,6 +42,8 @@ export interface VideoTarget {
   /** The pairing token (raw bytes). */
   readonly token: Uint8Array
   readonly facing: Facing
+  /** The codecs the PC accepts (`ready.video.codecs`). */
+  readonly codecs: ReadonlyArray<string>
 }
 
 /**
@@ -86,6 +95,9 @@ export class Window {
   }
 }
 
+const sameMode = (a: VideoMode, b: VideoMode) =>
+  a.codec === b.codec && a.width === b.width && a.height === b.height && a.fps === b.fps
+
 const REPORT_EVERY = "1 second"
 
 /**
@@ -128,8 +140,18 @@ export const runVideo = Effect.fn("Video.run")(function* (
       message: "That PC couldn't prove who it is."
     })
 
-  const session: CameraSession = yield* camera.open(target.facing)
-  yield* send({ t: "video", on: true, camera: target.facing })
+  // What this camera reports, what the PC accepts and what has been tried: the modes offered. Nothing
+  // here looks at the link; that is for a measurement (docs/protocol.md, section 8.8).
+  const caps = yield* camera.capabilities(target.facing)
+  const modes = modesFor(caps, target.codecs)
+  const mode = pickMode(modes)
+  if (mode === null)
+    return yield* new CameraError({
+      message: `This camera has no mode this PC can receive (it takes: ${target.codecs.join(", ")}).`
+    })
+
+  const session: CameraSession = yield* camera.open(target.facing, mode)
+  yield* send({ t: "video", on: true, camera: target.facing, mode, modes })
   yield* report({ fps: 0, kBps: 0, ackMs: null, sendMs: null, viewers: 0, camera: null }) // the camera is on
 
   const window = new Window()
@@ -158,9 +180,15 @@ export const runVideo = Effect.fn("Video.run")(function* (
       case "error":
         return Effect.fail(new AuthError({ code: m.code, message: m.message }))
       case "video":
-        return m.on
-          ? Effect.void
-          : Effect.fail(new ProtocolError({ message: m.error ?? "The PC turned the camera off." }))
+        if (!m.on)
+          return Effect.fail(
+            new ProtocolError({ message: m.error ?? "The PC turned the camera off." })
+          )
+        // A PC answers with the mode it was sent. One that picked another from the list is not
+        // followed yet (docs/protocol.md, section 8.2): the video ends rather than send the wrong thing.
+        return m.mode !== undefined && !sameMode(m.mode, mode)
+          ? Effect.fail(new ProtocolError({ message: "The PC asked for a different video mode." }))
+          : Effect.void
       default:
         return Effect.void
     }

@@ -33,7 +33,8 @@ typealias FrameCallback = (frame: ByteArray?, error: Throwable?) -> Unit
  * dropped here, before any work and long before they could queue behind the microphone.
  *
  * A frame is the message body of docs/protocol.md type 0x04: seq (u32), capture time in ms (u32),
- * width (u16), height (u16), then the JPEG. The picture is upright and not mirrored.
+ * codec (u8), flags (u8), width (u16), height (u16), then the JPEG. The picture is upright and not
+ * mirrored.
  */
 class FrameSource(private val context: Context) {
   private val analysisExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "phoneset-camera") }
@@ -187,8 +188,10 @@ class FrameSource(private val context: Context) {
     val n = seq++
     putInt(out, 0, n)
     putInt(out, 4, capturedMs.toInt())
-    out[8] = (w shr 8).toByte(); out[9] = w.toByte()
-    out[10] = (h shr 8).toByte(); out[11] = h.toByte()
+    out[8] = CODEC_JPEG
+    out[9] = FLAG_KEY // every JPEG can be decoded on its own
+    out[10] = (w shr 8).toByte(); out[11] = w.toByte()
+    out[12] = (h shr 8).toByte(); out[13] = h.toByte()
 
     // For measuring: `adb shell setprop log.tag.PhonesetCamera VERBOSE` prints when each frame was
     // captured by the phone's wall clock, to compare with when the PC delivered it.
@@ -228,7 +231,9 @@ class FrameSource(private val context: Context) {
   }
 
   companion object {
-    const val HEADER = 12
+    const val HEADER = 14
+    const val CODEC_JPEG: Byte = 1
+    const val FLAG_KEY: Byte = 1
     private const val TAG = "PhonesetCamera"
   }
 }
