@@ -131,10 +131,20 @@ type Ready struct {
 
 // VideoCaps tells the phone whether it may open the video connection (docs/protocol.md, section 8).
 type VideoCaps struct {
-	Available     bool   `json:"available"`
-	Reason        string `json:"reason,omitempty"`
-	Path          string `json:"path,omitempty"`
-	MaxFrameBytes int    `json:"maxFrameBytes,omitempty"`
+	Available     bool     `json:"available"`
+	Reason        string   `json:"reason,omitempty"`
+	Path          string   `json:"path,omitempty"`
+	MaxFrameBytes int      `json:"maxFrameBytes,omitempty"`
+	Codecs        []string `json:"codecs,omitempty"`   // the codecs this PC accepts
+	Features      []string `json:"features,omitempty"` // optional extras; none yet (section 8.8 reserves "probe")
+}
+
+// VideoMode is a codec, a size and a frame rate. The protocol names no tiers: 720p30 is just a mode.
+type VideoMode struct {
+	Codec  string `json:"codec"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	FPS    int    `json:"fps"`
 }
 
 // Stream is sent by the phone to request streams and echoed by the PC with the
@@ -150,10 +160,12 @@ type Stream struct {
 // VideoState is sent on the video connection: by the phone to start or stop the camera (and to say
 // which one), and by the PC with the state that is in effect.
 type VideoState struct {
-	T      string `json:"t"`
-	On     bool   `json:"on"`
-	Camera string `json:"camera,omitempty"`
-	Error  string `json:"error,omitempty"`
+	T      string      `json:"t"`
+	On     bool        `json:"on"`
+	Camera string      `json:"camera,omitempty"`
+	Mode   *VideoMode  `json:"mode,omitempty"`  // what the phone sends, or what is in effect
+	Modes  []VideoMode `json:"modes,omitempty"` // everything the phone is willing to send (a request only)
+	Error  string      `json:"error,omitempty"`
 }
 
 // VideoAck confirms that the PC has read a video frame (section 8.3).
@@ -207,12 +219,27 @@ type Bye struct {
 // AudioHeaderLen is the length of the sequence number that prefixes PCM data.
 const AudioHeaderLen = 4
 
-// A video message is seq (u32), capture time in ms (u32), width (u16), height (u16), then a JPEG.
+// A video message is seq (u32), capture time in ms (u32), codec (u8), flags (u8), width (u16), height
+// (u16), then the coded picture.
 const (
-	VideoHeaderLen = 12
-	// MaxVideoFrame is the largest JPEG a PC accepts. It is announced in Ready.
-	MaxVideoFrame = 1 << 20
+	VideoHeaderLen = 14
+	// MaxVideoFrame is the largest frame a PC reads. It is announced in Ready.
+	MaxVideoFrame = 4 << 20
 )
+
+// Codec names (in modes) and numbers (in the frame header). Only JPEG has a defined payload so far.
+const (
+	CodecJPEG = "jpeg"
+	CodecH264 = "h264"
+	CodecHEVC = "hevc"
+
+	CodecByteJPEG byte = 1
+	CodecByteH264 byte = 2
+	CodecByteHEVC byte = 3
+)
+
+// VideoFlagKey marks a frame that can be decoded on its own.
+const VideoFlagKey byte = 1
 
 // Camera facings in Stream.Camera.
 const (

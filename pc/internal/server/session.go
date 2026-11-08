@@ -139,7 +139,10 @@ func (se *session) ready() proto.Ready {
 	if opt.NoVideo {
 		r.Video = &proto.VideoCaps{Reason: "Turned off on the PC (--no-video)."}
 	} else {
-		r.Video = &proto.VideoCaps{Available: true, Path: proto.VideoPath, MaxFrameBytes: proto.MaxVideoFrame}
+		r.Video = &proto.VideoCaps{
+			Available: true, Path: proto.VideoPath, MaxFrameBytes: proto.MaxVideoFrame,
+			Codecs: videoCodecs, Features: []string{},
+		}
 	}
 	return r
 }

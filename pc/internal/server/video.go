@@ -5,7 +5,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -24,6 +27,16 @@ import (
 // Everything about video lives in this file; the audio session knows only that a video connection
 // may belong to it.
 
+// videoCodecs are the codecs this PC accepts. It relays JPEG frames without decoding them; a codec
+// that needs a decoder is added here when its payload is defined (docs/protocol.md, section 8.7).
+var videoCodecs = []string{proto.CodecJPEG}
+
+// Bounds for a mode the phone asks for. The 16-bit sizes of the frame header are the real limit.
+const (
+	maxVideoSide = 16384
+	maxVideoFPS  = 240
+)
+
 // videoConn is one video connection.
 type videoConn struct {
 	ch     *secure.Channel
@@ -33,7 +46,8 @@ type videoConn struct {
 	// used by the goroutine that reads the connection only
 	on     bool
 	camera string
-	gen    uint64 // the Hub's number for this stream
+	mode   proto.VideoMode // the mode in effect, while on
+	gen    uint64          // the Hub's number for this stream
 	bad    uint64
 }
 
@@ -193,6 +207,24 @@ func (s *Server) videoControl(ctx context.Context, vc *videoConn, body []byte) (
 	return false
 }
 
+// checkMode says why a mode can't be accepted, or "".
+func checkMode(req proto.VideoState) string {
+	m := req.Mode
+	if m == nil {
+		return "The video request has no mode."
+	}
+	if !slices.Contains(videoCodecs, m.Codec) {
+		return fmt.Sprintf("This PC can't receive %q video (it takes: %s).", m.Codec, strings.Join(videoCodecs, ", "))
+	}
+	if m.Width < 1 || m.Height < 1 || m.Width > maxVideoSide || m.Height > maxVideoSide || m.FPS < 1 || m.FPS > maxVideoFPS {
+		return "That video size or frame rate is out of range."
+	}
+	if len(req.Modes) > 0 && !slices.Contains(req.Modes, *m) {
+		return "The mode is not one of the modes the phone offered."
+	}
+	return ""
+}
+
 // applyVideo starts or stops the camera stream and reports the state that is in effect.
 func (s *Server) applyVideo(vc *videoConn, req proto.VideoState) proto.VideoState {
 	camera := req.Camera
@@ -202,44 +234,55 @@ func (s *Server) applyVideo(vc *videoConn, req proto.VideoState) proto.VideoStat
 	if camera == "" {
 		camera = proto.CameraBack
 	}
-	switch {
-	case !req.On:
-		s.stopVideo(vc)
-	case !vc.on || vc.camera != camera:
-		vc.gen = s.video.Begin(camera)
-		if !vc.on {
-			s.log.Info("camera on", "facing", camera)
+	if req.On {
+		if why := checkMode(req); why != "" {
+			s.stopVideo(vc)
+			return proto.VideoState{T: proto.TVideo, On: false, Error: why}
 		}
-		vc.on, vc.camera = true, camera
-		s.changed()
+		mode := *req.Mode
+		if !vc.on || vc.camera != camera || vc.mode != mode {
+			s.log.Debug("video modes offered", "count", len(req.Modes))
+			vc.gen = s.video.Begin(camera, mode.Codec, mode.FPS)
+			if !vc.on {
+				s.log.Info("camera on", "facing", camera, "codec", mode.Codec, "size", fmt.Sprintf("%dx%d", mode.Width, mode.Height), "fps", mode.FPS)
+			}
+			vc.on, vc.camera, vc.mode = true, camera, mode
+			s.changed()
+		}
+	} else {
+		s.stopVideo(vc)
 	}
 	state := proto.VideoState{T: proto.TVideo, On: vc.on}
 	if vc.on {
-		state.Camera = vc.camera
+		mode := vc.mode
+		state.Camera, state.Mode = vc.camera, &mode
 	}
 	return state
 }
 
 // onVideo relays one camera frame to the readers and tells the phone it arrived (section 8). The
-// JPEG is not decoded; it only has to look like one.
+// picture is not decoded; a JPEG only has to look like one.
 func (s *Server) onVideo(ctx context.Context, vc *videoConn, body []byte) {
 	if !vc.on || len(body) < proto.VideoHeaderLen {
 		return // the camera is off (a frame that was already on its way) or this is not a frame
 	}
 	seq := binary.BigEndian.Uint32(body[0:4])
-	w, h := int(binary.BigEndian.Uint16(body[8:10])), int(binary.BigEndian.Uint16(body[10:12]))
-	jpeg := body[proto.VideoHeaderLen:]
-	if len(jpeg) < 4 || len(jpeg) > proto.MaxVideoFrame || jpeg[0] != 0xFF || jpeg[1] != 0xD8 || w == 0 || h == 0 {
-		if vc.bad++; vc.bad == 1 {
-			s.log.Warn("ignored a camera frame that is not a JPEG", "bytes", len(jpeg))
-		}
-	} else {
+	codec := body[8]
+	w, h := int(binary.BigEndian.Uint16(body[10:12])), int(binary.BigEndian.Uint16(body[12:14]))
+	payload := body[proto.VideoHeaderLen:]
+	if vc.mode.Codec == proto.CodecJPEG && codec == proto.CodecByteJPEG && isJPEG(payload) && w > 0 && h > 0 {
 		s.video.Publish(&video.Frame{
-			Seq: seq, CapturedMs: binary.BigEndian.Uint32(body[4:8]), Width: w, Height: h, JPEG: jpeg,
+			Seq: seq, CapturedMs: binary.BigEndian.Uint32(body[4:8]), Width: w, Height: h, JPEG: payload,
 		})
+	} else if vc.bad++; vc.bad == 1 {
+		s.log.Warn("ignored a camera frame that is not what the mode says", "codec", codec, "bytes", len(payload))
 	}
 	// Acknowledged either way, so the phone's window never stalls on a bad frame.
 	_ = sendJSON(ctx, vc.ch, proto.VideoAck{T: proto.TVAck, Seq: seq})
+}
+
+func isJPEG(b []byte) bool {
+	return len(b) >= 4 && len(b) <= proto.MaxVideoFrame && b[0] == 0xFF && b[1] == 0xD8
 }
 
 func (s *Server) sendVideoStats(ctx context.Context, vc *videoConn) {

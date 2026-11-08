@@ -19,15 +19,17 @@ type Frame struct {
 
 // Status describes the video stream right now.
 type Status struct {
-	On      bool    `json:"on"`
-	Camera  string  `json:"camera,omitempty"`
-	Width   int     `json:"width,omitempty"`
-	Height  int     `json:"height,omitempty"`
-	FPS     float64 `json:"fps"`
-	KBps    float64 `json:"kBps"`
-	Frames  uint64  `json:"frames"`
-	Bytes   uint64  `json:"bytes"`
-	Viewers int     `json:"viewers"`
+	On       bool    `json:"on"`
+	Camera   string  `json:"camera,omitempty"`
+	Codec    string  `json:"codec,omitempty"`
+	AskedFPS int     `json:"askedFps,omitempty"` // the rate the phone was asked to capture at
+	Width    int     `json:"width,omitempty"`
+	Height   int     `json:"height,omitempty"`
+	FPS      float64 `json:"fps"`
+	KBps     float64 `json:"kBps"`
+	Frames   uint64  `json:"frames"`
+	Bytes    uint64  `json:"bytes"`
+	Viewers  int     `json:"viewers"`
 }
 
 const rateWindow = 32 // frames the rate is measured over
@@ -39,6 +41,8 @@ type Hub struct {
 	on     bool
 	gen    uint64 // which Begin the stream belongs to, so a late End of an older one does nothing
 	camera string
+	codec  string
+	asked  int
 	latest *Frame
 	subs   map[*Sub]struct{}
 	frames uint64
@@ -86,14 +90,14 @@ func (h *Hub) Subscribe() *Sub {
 
 // Begin marks the start of a video stream from a phone and clears the counters. The number it returns
 // is the stream's: only End with that number ends it.
-func (h *Hub) Begin(camera string) uint64 {
+func (h *Hub) Begin(camera, codec string, askedFPS int) uint64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.on {
 		h.frames, h.bytes, h.count = 0, 0, 0
 		h.latest = nil
 	}
-	h.on, h.camera = true, camera
+	h.on, h.camera, h.codec, h.asked = true, camera, codec, askedFPS
 	h.gen++
 	return h.gen
 }
@@ -106,7 +110,7 @@ func (h *Hub) End(gen uint64) {
 	if gen != h.gen {
 		return
 	}
-	h.on, h.camera, h.latest = false, "", nil
+	h.on, h.camera, h.codec, h.asked, h.latest = false, "", "", 0, nil
 }
 
 // Publish hands a frame to every reader without ever blocking.
@@ -154,7 +158,7 @@ func (h *Hub) Active() bool {
 func (h *Hub) Status() Status {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := Status{On: h.on, Camera: h.camera, Frames: h.frames, Bytes: h.bytes, Viewers: len(h.subs)}
+	st := Status{On: h.on, Camera: h.camera, Codec: h.codec, AskedFPS: h.asked, Frames: h.frames, Bytes: h.bytes, Viewers: len(h.subs)}
 	if h.latest != nil {
 		st.Width, st.Height = h.latest.Width, h.latest.Height
 	}

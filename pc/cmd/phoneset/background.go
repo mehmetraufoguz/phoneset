@@ -150,8 +150,8 @@ func printStatus(c *control.Client, s app.Snapshot) {
 		fmt.Printf("    microphone     %s\n", streamText(s.Mic.On, "→ "+s.Mic.Device))
 		fmt.Printf("    headphones     %s\n", streamText(s.Speaker.On, "← "+s.Speaker.Device))
 		if s.Video.On {
-			fmt.Printf("    camera         %s\n", streamText(true, fmt.Sprintf("%s camera, %d×%d, %.0f fps, %.0f kB/s, %d viewer(s)",
-				s.Video.Camera, s.Video.Width, s.Video.Height, s.Video.FPS, s.Video.KBps, s.Video.Viewers)))
+			fmt.Printf("    camera         %s\n", streamText(true, fmt.Sprintf("%s camera, %s %d×%d, %.0f of %d fps, %.0f kB/s, %d viewer(s)",
+				s.Video.Camera, s.Video.Codec, s.Video.Width, s.Video.Height, s.Video.FPS, s.Video.AskedFPS, s.Video.KBps, s.Video.Viewers)))
 			fmt.Printf("    view           %s\n", c.VideoURL())
 		}
 	}
