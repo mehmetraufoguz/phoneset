@@ -238,7 +238,7 @@ frames a second are just modes. After `authed` the phone starts the camera with
   when `modes` is present.
 - The PC answers with the state in effect: `{"t":"video","on":true,"camera":"back","mode":{…}}`, or
   `"on":false` and an `error`, for instance when `mode.codec` is not one of `ready.video.codecs`. In this
-  version the PC answers with the mode it was sent. A phone follows the `mode` of the answer.
+  version the PC answers with the mode it was sent. A phone that gets a different mode may end the video; the phone app does.
 - `camera` is `"back"` or `"front"`. Sending the message again with another camera or mode switches
   while running. The PC does not act on `camera`, it shows it.
 - `{"t":"video","on":false}` stops the camera without closing the connection; `bye` or closing the
