@@ -49,6 +49,9 @@ Written on 2026-11-08 from Apple's search and product page guidance (developer.a
 ratings. Promotional text does not affect ranking, and Apple does not say that the description does. The subtitle
 and the description can only change with a new version; Apple does not say that for the name or the keywords.
 
+Decision (2026-11-08): this does not get a release of its own. It ships with the next iOS release that carries a
+feature change, and the strings below are checked again at that point.
+
 | Field                | Live now                                                                                       | Planned                                                                                            |
 | -------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Subtitle (30)        | `Mic and headphones for a PC` (27)                                                             | `Phone as PC mic & headphones` (28)                                                                |
