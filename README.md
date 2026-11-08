@@ -4,6 +4,9 @@
 
 Use your phone as your PC's **microphone** and **headphones** over Wi-Fi.
 
+The iPhone app is on the [App Store](https://apps.apple.com/app/id6828815833). The PC program and the
+source of both are here.
+
 ```
  phone mic ──Wi-Fi──▶ phoneset (PC, terminal) ──▶ virtual cable ──▶ any app's microphone
  phone speaker ◀──Wi-Fi── phoneset (PC, terminal) ◀── what the PC is playing
@@ -187,6 +190,10 @@ npx skills add mehmetraufoguz/phoneset
 ```
 
 ### 2. On the phone
+
+**iPhone:** get it on the [App Store](https://apps.apple.com/app/id6828815833). It is a paid app;
+the source is open (MIT), so you can also build it yourself, as below. **Android:** not released
+yet; build it from source.
 
 The app uses native modules (audio engine, mDNS), so it runs as a development build, not
 in Expo Go.
