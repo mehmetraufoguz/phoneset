@@ -42,6 +42,29 @@ EU trader status.
 | Categories         |                                                                | Utilities (primary), Productivity (secondary)                                                                                                               |
 | What's New         | not available for the first version                            |                                                                                                                                                             |
 
+### Planned ASO update (not applied; needs a new app version)
+
+Written on 2026-11-08 from Apple's search and product page guidance (developer.apple.com/app-store/search,
+/app-store/product-page). Search ranks on the name, subtitle, keywords and primary category, plus downloads and
+ratings. Promotional text does not affect ranking, and Apple does not say that the description does. The subtitle
+and the description can only change with a new version; Apple does not say that for the name or the keywords.
+
+| Field                | Live now                                                                                       | Planned                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Subtitle (30)        | `Mic and headphones for a PC` (27)                                                             | `Phone as PC mic & headphones` (28)                                                                |
+| Keywords (100 bytes) | `microphone,wireless,windows,mac,audio,wifi,stream,voice,virtual,cable,speaker,gaming,computer` (93) | `microphone,wireless,windows,mac,wifi,audio,voice,speaker,stream,gaming,iphone,earphones,computer` (96) |
+| Name (30)            | `phoneset`                                                                                     | **undecided**, see below                                                                           |
+
+- The planned keywords repeat no word of the subtitle, the name or the categories, which Apple asks for.
+- `virtual,cable` are dropped on a guess that fewer people search for them. It is untested: there is no keyword data.
+- `iphone` is Apple's own trademark. Apple forbids unauthorized trademark terms and says nothing about its own;
+  drop it if App Review objects.
+- The name `phoneset: Phone as PC Mic` (25) would add the words people search for, but Apple asks for a simple name
+  that hints at what the app does, and the App Review rule on names was not read. Keep `phoneset` unless the owner
+  decides otherwise.
+- Measure before and after in App Store Connect, Analytics, source type App Store Search. With a handful of
+  downloads a change cannot be told from noise, so give each change a few weeks.
+
 Description (4000 characters, plain text, 1677 used). It names no price: guideline 2.3.14 keeps prices out of
 creative assets, and a price in the text goes stale.
 
