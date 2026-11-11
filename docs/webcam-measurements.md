@@ -184,6 +184,59 @@ What this shows:
   pairing by code ended with "Couldn't reach the PC"; typing the PC's address worked. This is about discovery,
   not video, and was not investigated further.
 
+## H.264 in hardware (iPhone, a prototype)
+
+Later the same night the iPhone was given a hardware H.264 coder (VideoToolbox, High profile, no B-frames, a key
+frame every 2 s, about 0.1 bit per pixel per frame as the target bit rate) to see whether it lifts the limits
+JPEG has. The payload is defined in protocol section 8.3; the PC passes the frames on unchanged and serves
+them as a raw Annex B stream (`/video.h264`); nothing decodes them in the program yet. The same Wi-Fi, the
+same phone, the 3-frame window, 25 s per mode, the back camera. `ffmpeg -f h264 -i <address>` decoded six seconds
+of the stream with no error (High profile, yuv420p, upright 480x640). Frame rate and bit rate are read from
+the stream on the PC side (pictures are counted from the slice NAL units that start one).
+
+| Mode    | JPEG fps | JPEG Mbit/s | JPEG KB/frame | H.264 fps | H.264 Mbit/s | H.264 KB/frame | H.264 with 2 pictures in the coder |
+| ------- | -------- | ----------- | ------------- | --------- | ------------ | -------------- | ---------------------------------- |
+| 480p30  | 30.1     | 7.4         | 30            | 30.0      | 0.5          | 2              |                                    |
+| 480p60  | 60.0     | 14.3        | 29            | 59.0      | 1.6          | 3              |                                    |
+| 720p30  | 30.1     | 16.6        | 67            | 29.8      | 2.6          | 11             |                                    |
+| 720p60  | 59.9     | 32.7        | 67            | 56.5      | 5.0          | 11             | 56.4 (5.3 Mbit/s)                  |
+| 1080p30 | 30.1     | 46.9        | 190           | 30.0      | 6.2          | 25             | 30.0 (6.2)                         |
+| 1080p60 | 38.7     | 54.6        | 172           | 53.9      | 9.5          | 21             | **59.5** (10.8)                    |
+| 2K30    | 19.9     | 38.4        | 235           | 30.0      | 2.7          | 11             | 30.0 (2.4)                         |
+| 2K60    | 19.5     | 37.7        | 236           | 59.0      | 13.8         | 29             | **60.0** (14.4)                    |
+| 4K30    | 4.4      | 34.0        | 942           | 15.0      | 24.9         | 202            | **25.4** (24.9)                    |
+| 4K60    | 4.7      | 28.7        | 745           | 20.0      | 27.9         | 170            | **25.6** (34.5)                    |
+
+The JPEG columns are the best runs of the earlier sections (the 3-frame window for 1080p to 4K30, the 2-frame window
+for the modes below and for 4K60, a cool phone); the scene was not the same in every run, so frame sizes differ a
+little. "With 2 pictures
+in the coder" is a change to how the phone asks for pictures: the next picture is asked for before the last one
+has come back from the coder, so that the coder's own delay does not become the frame period.
+
+What this shows:
+
+- **The bit rate is 5 to 15 times lower at the same size**: 1080p30 6.2 against 36 to 47 Mbit/s, 2K60 14 against 38,
+  4K30 25 against 34 at a fifth of the frame rate. Frames are 2 to 30 KB up to 2K60 where JPEG made 30 to 240 KB.
+- **Every mode up to 2K60 reaches its rate**, 720p60 at 56 of 60 and the rest at 30 or 59 to 60, and in the second
+  pass none of them had a 100 ms stall. 4K reaches 25 fps. JPEG reached its rate only up to 720p60 and 1080p30.
+- **The coder's delay matters, not its speed.** At 4K30 the phone logged 37.5 ms from handing a picture over to
+  getting the coded frame back (7 ms at 720p60, 11.5 ms at 1080p60). With one picture in the coder at a time that delay
+  became the frame period and 4K30 ran at 15 fps; with two it ran at 25.4 (the coded frame took 57 ms
+  to come back, the cost is that much more latency, which was not measured).
+- **What still limits 4K** looks like the JavaScript hand-over of a 120 to 170 KB frame (28 to 46 ms, about 4 MB/s when
+  the phone had been busy for an hour; it was 13 ms for 144 KB when cool) together with the coder's delay.
+  A fixed cost of about 4 ms per message showed even for an 11 KB frame, which at 60 fps is a quarter of the
+  JavaScript thread. 720p60 stays at 56 fps in both runs for a reason the counters do not show (the camera
+  gave 59.6, 56.2 were coded, pictures were being asked for in time).
+- **One freeze of 1.9 s** was seen in the first 1080p60 run: the reader on the PC missed a frame and, by the rule
+  of `/video.h264`, waited for the next key frame. The phone's counters showed no gap. A real consumer (the virtual
+  camera) needs a better rule than waiting up to 2 s: a short queue per reader, or a key frame on request.
+
+Not measured here: how long a run holds once the phone has warmed (the later modes ran on a warm phone), the latency
+from the camera to a picture on the PC, the PC's decoding, other iPhones (the hardware coder is assumed on every
+supported model), Android (MediaCodec was not tried), the front camera, dark scenes (the bit rate depends on the
+scene; these runs had one) and a worse Wi-Fi.
+
 ## Not tested
 
 Wi-Fi capacity as such (the link test of protocol section 8.8 is not built), distance, 2.4 GHz, the front camera
@@ -205,5 +258,9 @@ beyond receiving the frames (there is no virtual camera yet).
   950 KB.
 - The modes above 1080p, and any sustained run on a phone that heats up, are expected to need a hardware
   encoder (H.264 or HEVC) and a decoder on the PC (protocol section 8.7).
+- H.264 in hardware, measured on the iPhone (previous section), takes the modes up to 2K60 to their requested rate at
+  5 to 15 times fewer bits than JPEG and 4K to 25 fps. It is the way to offer the tiers that were planned. What it
+  needs next is not measured: a decoder on the PC (which the virtual camera needs in any case), the same on Android
+  (MediaCodec), the latency, and a run of an hour on a phone that warms up.
 - On a phone of the OPPO's class, JPEG on Android can only be offered at 480p today, and the sizes it offers should
   be the sizes the module delivers. Whether a faster Android phone does much better was not measured.
