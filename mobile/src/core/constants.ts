@@ -26,5 +26,10 @@ export const VIDEO_PATH = "/v2/video"
 /** JPEG quality asked of the camera side. The size and rate come from the video mode (core/videoModes.ts). */
 export const VIDEO_QUALITY = 70
 
-/** Frames sent and not yet acknowledged: at most this many, and at most this many bytes. */
-export const VIDEO_WINDOW = { frames: 2, bytes: 256 * 1024 } as const
+/**
+ * Frames sent and not yet acknowledged: at most this many, and at most this many bytes. Three frames and
+ * 2 MB, from the measurements in docs/webcam-measurements.md: with 2 frames and 256 KB a frame over about
+ * 128 KB (1080p and up) was the only one in flight, the next was made only after its acknowledgement, and
+ * 1080p30 reached 17 fps instead of 30. A larger window costs latency on a slow link (more frames wait).
+ */
+export const VIDEO_WINDOW = { frames: 3, bytes: 2 * 1024 * 1024 } as const
