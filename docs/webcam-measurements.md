@@ -16,6 +16,8 @@ show is written next to it.
   frames and missing sequence numbers were read from the stream itself. The app was in the foreground the
   whole time (iOS stops the camera in the background; an 8 s stall in an early run was most likely that,
   and the run was repeated).
+- For the second and third pass the phone also logged its own timings once a second, read from the device
+  console. They were temporary measuring code and are not in `main`.
 - JPEG quality 70 (`VIDEO_QUALITY`). The phone holds the picture upright, so a 1920 x 1080 mode arrives
   as 1080 x 1920.
 
@@ -29,8 +31,8 @@ for. The Android module already asks CameraX for a size but sets no frame rate; 
 
 ## Results
 
-Frame rate is the average over 25 s (the worst single second in brackets). Every run had 0 missing
-sequence numbers.
+First pass, all ten modes. Frame rate is the average over 25 s (the worst single second in brackets). Every
+run in every pass had 0 missing sequence numbers.
 
 | Mode             | fps (worst second) | Mbit/s | KB per frame | Notes                                   |
 | ---------------- | ------------------ | ------ | ------------ | --------------------------------------- |
@@ -39,7 +41,7 @@ sequence numbers.
 | 720p30           | 30.0 (29)          | 18.1   | 74           |                                         |
 | 720p60           | 59.4 (45)          | 35.3   | 73           | one gap of 259 ms                       |
 | 1080p30          | 28.8 (23)          | 37.6   | 159          |                                         |
-| 1080p60          | 20.7 (20)          | 27.4   | 161          | steady at about a third of the request  |
+| 1080p60          | 20.7 (20)          | 27.4   | 161          | see the second and third pass           |
 | 2K30 (1920x1440) | 15.1 (14)          | 28.1   | 228          |                                         |
 | 2K60             | 20.0 (19)          | 38.6   | 235          |                                         |
 | 4K30             | 7.7 (6)            | 39.3   | 626          | 188 gaps over 100 ms                    |
@@ -47,33 +49,86 @@ sequence numbers.
 
 A longer run at 720p30 (120 s) held 30.0 fps, 16.8 Mbit/s, with a longest gap of 70 ms.
 
-## Reading them
+Second pass, the same modes again (fps; JPEG made per second out of the camera's own rate):
 
-Shown by the numbers:
+| Mode    | fps  | Camera fps / JPEGs per s | Same mode in the first pass |
+| ------- | ---- | ------------------------ | --------------------------- |
+| 480p30  | 30.1 | 29.9 / 29.8              | 30.1                        |
+| 480p60  | 60.0 | 59.8 / 59.7              | 55.7                        |
+| 720p30  | 30.1 | 29.9 / 29.9              | 30.0                        |
+| 720p60  | 59.9 | 59.9 / 59.7              | 59.4                        |
+| 1080p30 | 29.7 | 29.9 / 29.2              | 28.8                        |
+| 1080p60 | 29.9 | 59.9 / 29.7              | 20.7                        |
+| 2K30    | 16.0 | 30.0 / 15.9              | 15.1                        |
+| 2K60    | 20.3 | 59.8 / 19.9              | 20.0                        |
+| 4K30    | 6.5  | 29.9 / 6.3               | 7.7                         |
+| 4K60    | 4.5  | 59.9 / 4.5               | 4.7                         |
 
-- With JPEG, 480p to 720p60 and 1080p30 run at or close to the requested rate on this link.
-- 1080p60, 2K and 4K do not reach the requested rate, and the gap grows with the size of the frame.
-- Four modes (720p60, 1080p30, 2K60, 4K30) land at 35 to 39 Mbit/s. Several different modes ending at about the
-  same bit rate looks like a limit of the whole path, not of one mode.
+The first pass's 1080p60 figure was measured while the app was switching to the next mode and is not
+trusted; the second and third pass agree on about 30 fps.
 
-Not shown, only guessed:
+## Where the time of one frame goes
 
-- Where that limit is. Three modes (1080p60, 2K30, 4K60) are below it and sit at 15 to 21 fps, and the rates
-  look like whole camera frame periods (every second frame at 30 fps, every third at 60), which would fit a
-  per-frame cycle that runs one frame at a time: make the JPEG, hand it to JavaScript, encrypt, send, wait for
-  the PC's acknowledgement. The phone's own counters were not read, so the encoder, that cycle and the Wi-Fi are
-  not told apart yet.
-- Anything about the link in a worse spot, at a distance, on 2.4 GHz or with other traffic.
+The phone logged, per frame and averaged over the run (a cool phone, second pass; the hand-over column is from
+the third pass, run a few minutes later):
+
+| Mode    | KB per frame | Making the JPEG | Hand-over to the socket | Send to acknowledgement | fps  |
+| ------- | ------------ | --------------- | ----------------------- | ----------------------- | ---- |
+| 720p60  | 66           | 2.6 ms          | 5.7 ms                  | 15 ms                   | 59.9 |
+| 1080p30 | 149          | 4.4 ms          | 13.8 ms                 | 25 ms                   | 29.7 |
+| 1080p60 | 144          | 4.4 ms          | 12.8 ms                 | 24 ms                   | 29.9 |
+| 2K30    | 185          | 5.7 ms          | 19.9 ms                 | 33 ms                   | 16.0 |
+| 2K60    | 204          | 6.0 ms          | 27.5 ms (45 ms later)   | 41 ms                   | 20.3 |
+| 4K30    | 634          | 16.0 ms         | 93 to 116 ms            | 121 to 167 ms           | 6.5  |
+| 4K60    | 749          | 17.5 ms         | 156 to 159 ms           | 187 to 192 ms           | 4.5  |
+
+"Hand-over to the socket" is the time `WebSocket.send` takes in JavaScript. The sealing (AES-GCM, native) took
+0.1 to 0.3 ms per frame up to 2K and under 1 ms at 4K; copying the message together took 0.0 ms.
+
+What this shows:
+
+- **The JPEG encoder is not the limit.** 2 to 6 ms up to 2K, 16 to 18 ms at 4K.
+- **The hand-over to the socket is the biggest cost of a frame**, and it grows with the frame: 5.7 ms for 66 KB,
+  13 ms for 144 KB, 20 ms for 185 KB, about 160 ms for 749 KB, a rate of 5 to 12 MB/s. `WebSocket.send` returns
+  without waiting for the network, so this is work on the phone, not the link. In React Native's
+  `WebSocket.send` a binary message is turned into base64 in JavaScript (`binaryToBase64`) before
+  `sendBinary` hands it to the native side.
+- **Up to 720p60 two frames are in flight and the pipeline keeps up.** The next frame is asked for less than
+  1 ms after the last one was handed over. From 1080p on, a frame is over half of the 256 KB window of
+  `VIDEO_WINDOW`, only one frame may be in flight, and the next one is asked for only after the PC has
+  acknowledged the last (the time to ask is the same as the acknowledgement time in the table). One cycle is
+  then the wait for the camera, plus the JPEG, plus the hand-over and the acknowledgement: 1080p60 is
+  5.3 + 4.4 + 23.9 = 33.6 ms, which is 29.7 fps.
+- **That explains the steps in the frame rate.** A cycle a little longer than one camera frame (33.3 ms at 30 fps)
+  misses the next camera frame and waits for the one after it, so half of the frames are used (15 fps at 2K30);
+  at 60 fps a cycle between 33 and 50 ms uses every third (20 fps at 2K60, and 1080p60 only reaching
+  30 fps).
+- **The Wi-Fi was not the limit at this spot.** Between the end of the hand-over and the acknowledgement a
+  745 KB frame took 32 ms in the 4K60 mode, which is at least 23 MB/s, about 186 Mbit/s, on this link, close to the
+  router. A worse spot may well be slower; that was not measured.
+- **The phone slows down with use.** After about an hour of runs, mostly with the camera at the higher modes,
+  720p60 was measured again with the same 65 KB frames: 39.5 fps instead of 59.8, the hand-over 14.3 ms
+  instead of 5.7 ms and the JPEG 4.5 ms instead of 2.6 ms. Both the native and the JavaScript work were about
+  twice as slow. Heat or another load on the phone is the likely reason, but the phone's temperature was not read,
+  so it is not proven. The same mode also varied between runs by up to 40 percent, so one run is not a figure
+  to quote: 2K60 gave 20.0, 20.3 and 12.7 fps, 4K30 7.7, 6.5 and 5.0.
 
 ## Not tested
 
 Wi-Fi capacity as such (the link test of protocol section 8.8 is not built), distance, 2.4 GHz, the front camera
-at the higher modes, a locked screen, runs longer than two minutes, battery and heat, the Android phone, and
-the PC side beyond receiving the frames (there is no virtual camera yet).
+at the higher modes, a locked screen, runs longer than two minutes, battery, the phone's temperature, the
+Android phone, a larger window, a native socket, and the PC side beyond receiving the frames (there is no virtual
+camera yet).
 
 ## What this means for the product
 
-The modes planned (480p to 4K, 30 and 60) are what the camera can report. With JPEG only the lower ones are
-worth offering today; the gate for that is `CODEC_TRIED` in `mobile/src/core/videoModes.ts`, which should
-follow these numbers once the cause above is known. The higher modes are expected to need a hardware encoder
-(H.264 or HEVC) and a decoder on the PC (protocol section 8.7).
+- With JPEG as it is built now, 480p to 720p60 and 1080p30 run at the requested rate on a cool phone, 1080p60
+  and 2K reach about half to two thirds of it, and 4K about a sixth. The gate for what is offered is
+  `CODEC_TRIED` in `mobile/src/core/videoModes.ts`; it should follow these numbers.
+- Two changes are suggested by the measurements and are not tried: letting more than one frame be in flight
+  whatever its size (a policy of the sender, protocol section 8.4), which should remove the acknowledgement
+  wait from the cycle and so the steps in the frame rate, and handing the frame to the network from native code
+  instead of through React Native's `WebSocket`, which would take the base64 work off the JavaScript thread.
+  Neither helps the frame size itself: at 4K a JPEG is 630 to 750 KB.
+- The modes above 1080p, and any sustained run on a phone that heats up, are expected to need a hardware
+  encoder (H.264 or HEVC) and a decoder on the PC (protocol section 8.7).
