@@ -113,12 +113,46 @@ What this shows:
   so it is not proven. The same mode also varied between runs by up to 40 percent, so one run is not a figure
   to quote: 2K60 gave 20.0, 20.3 and 12.7 fps, 4K30 7.7, 6.5 and 5.0.
 
+## Android: OPPO A9 2020
+
+The same evening, with the same Mac and Wi-Fi: an OPPO A9 2020 (CPH1941), Android 11, Snapdragon 665, a Release
+build of `main` plus the temporary measuring code. The phone was on 5 GHz at 433 Mbit/s, signal -25 dBm. Its
+battery temperature, as the phone reports it, went from 31.6 to 41.6 degrees C during the runs. The phone logged
+the same kind of counters as the iPhone did, to logcat.
+
+The Android module offered five modes, all at 30 fps (what the module reports for this camera; why there is no
+60 fps mode was not looked into). Same method as above, 25 s per mode, back camera:
+
+| Mode offered | Frame received | fps (worst second) | Mbit/s | KB per frame | Making the JPEG |
+| ------------ | -------------- | ------------------ | ------ | ------------ | --------------- |
+| 864x480@30   | 480x864        | 24.2 (19)          | 2.8    | 14           | 28.5 ms         |
+| 1600x720@30  | 1080x1920      | 5.4 (1)            | 4.4    | 99           | 179 ms          |
+| 2400x1080@30 | 1512x2688      | 1.3 (1)            | 2.5    | 235          | 644 ms          |
+| 1920x1440@30 | 1512x2688      | 1.6 (1)            | 3.0    | 235          | not read        |
+| 3840x2160@30 | 2160x3840      | 0.4 (1)            | 2.0    | 566          | 2124 ms         |
+
+Every run had 0 missing sequence numbers.
+
+What this shows:
+
+- **On this phone only the smallest mode is usable, and the limit is making the JPEG.** 28 ms at 480p, 179 ms at
+  1080 x 1920, 644 ms at 1512 x 2688, over 2 s at 4K. The Wi-Fi carried 2 to 4 Mbit/s of a 433 Mbit/s link and the
+  hand-over to the socket was 4 to 100 ms, so the link was not what limited it. At 480p the camera itself delivered
+  only 23.9 fps; why was not looked into.
+- **The frame is not the size of the mode.** The module asks CameraX for a size with a 16:9 aspect ratio and the
+  closest larger one, so the two 20:9 sizes and the 4:3 size it offered arrived as 1920 x 1080 and 2688 x 1512
+  (two modes ended up as the same 2688 x 1512). The frame header carries the true size and the PC does not check
+  it against the mode, so nothing broke, but a mode should name what the frame is.
+- **The phone's own discovery did not work.** It found the PC but resolved its name as `R-M-9.local.local.`, and
+  pairing by code ended with "Couldn't reach the PC"; typing the PC's address worked. This is about discovery,
+  not video, and was not investigated further.
+
 ## Not tested
 
 Wi-Fi capacity as such (the link test of protocol section 8.8 is not built), distance, 2.4 GHz, the front camera
-at the higher modes, a locked screen, runs longer than two minutes, battery, the phone's temperature, the
-Android phone, a larger window, a native socket, and the PC side beyond receiving the frames (there is no virtual
-camera yet).
+at the higher modes, a locked screen, runs longer than two minutes, battery, the iPhone's temperature, a larger
+window, a native socket, a second Android phone or a faster one, an Android hardware encoder, and the PC side
+beyond receiving the frames (there is no virtual camera yet).
 
 ## What this means for the product
 
@@ -132,3 +166,5 @@ camera yet).
   Neither helps the frame size itself: at 4K a JPEG is 630 to 750 KB.
 - The modes above 1080p, and any sustained run on a phone that heats up, are expected to need a hardware
   encoder (H.264 or HEVC) and a decoder on the PC (protocol section 8.7).
+- On a phone of the OPPO's class, JPEG on Android can only be offered at 480p today, and the sizes it offers should
+  be the sizes the module delivers. Whether a faster Android phone does much better was not measured.
