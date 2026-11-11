@@ -278,8 +278,11 @@ everything else. Two rules:
 - **The PC acknowledges each frame** the moment it has been read: `{"t":"vack","seq":n}`. The sender
   limits how much is sent and not yet acknowledged, and discards (never queues) the pictures the camera
   produces beyond that. The limit is the sender's policy, not part of the protocol; it has to allow at
-  least one frame whatever its size. The phone app keeps at most two frames, and about 256 KB beyond the
-  first. A slow link therefore lowers the frame rate, and a fast one does not need a different rule.
+  least one frame whatever its size. The phone app keeps at most three frames in flight, and the bytes in
+  flight plus one more frame of the size of the last stay under 2 MB (it was two frames and 256 KB; that
+  left a frame over 128 KB alone in flight and halved the frame rate at 1080p, see
+  `docs/webcam-measurements.md`). A slow link therefore lowers the frame rate, and a fast one does not need
+  a different rule.
 
 ### 8.5 Statistics
 

@@ -198,7 +198,8 @@ beyond receiving the frames (there is no virtual camera yet).
   `CODEC_TRIED` in `mobile/src/core/videoModes.ts`; it should follow these numbers.
 - Letting more than one frame be in flight whatever its size (a policy of the sender, protocol section 8.4) was
   tried on the iPhone and measured (previous section): 1080p30 went from 16.8 to 30.1 fps and 1080p60 from 20.2
-  to 38.7, at the price of some latency, which was not measured. The next change would be handing the frame to
+  to 38.7, at the price of some latency, which was not measured. `VIDEO_WINDOW` in `main` is now 3 frames and
+  2 MB; nothing above 720p30 is offered yet, so the app behaves the same until the gate is raised. The next change would be handing the frame to
   the network from native code instead of through React Native's `WebSocket`, which would take the base64 work
   off the JavaScript thread; it was not tried. Neither helps the frame size itself: at 4K a JPEG is 630 to
   950 KB.
