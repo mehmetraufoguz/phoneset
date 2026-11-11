@@ -60,9 +60,9 @@ the app were checked on the repository and on an OPPO A9 2020 (Android 11).
   "if your app is not fully configured". The opt-in link appears only once the app's status is "Published"
   (**unverified**: what that means for a draft app with a first internal release). A first upload shows a
   temporary name and listing for up to 48 hours.
-- **The 12 testers for 14 days** rule is not on that page. It is the personal-account rule for applying for
-  production access (see `memory`-level notes in the owner's setup); whether it touches internal testing is
-  **unverified**.
+- **The 12 testers for 14 days** rule is not on that page. It is the rule for personal developer accounts before
+  they may apply for production access (Google's testing requirements page, read earlier); whether it touches
+  internal testing is **unverified**.
 - **Data safety**: apps active only on an internal track do not need the form. For production the form and the
   privacy policy link are required even if nothing is collected. "Collect" means sending data off the device;
   data only processed on the device need not be declared; data held only in memory for the time a real-time
