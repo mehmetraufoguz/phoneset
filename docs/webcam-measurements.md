@@ -113,6 +113,43 @@ What this shows:
   so it is not proven. The same mode also varied between runs by up to 40 percent, so one run is not a figure
   to quote: 2K60 gave 20.0, 20.3 and 12.7 fps, 4K30 7.7, 6.5 and 5.0.
 
+## A larger window (iPhone, old and new side by side)
+
+The window of section 8.4 (`VIDEO_WINDOW`: 2 frames and about 256 KB in flight) was the suspect for the steps
+in the frame rate. Later the same evening, with a clean build and a cool phone, each mode was measured twice
+in a row with the old window (2 frames, 256 KB) and a new one (3 frames, 2 MB), switched by a temporary button
+on the session screen, so that the scene and the phone's state were the same for both. A control run at 720p60
+with the old window gave 60.0 fps, the same as the first time, so the phone was not slowed down.
+
+| Mode    | KB per frame | Old window fps | New window fps | Old Mbit/s | New Mbit/s | Worst gap, new |
+| ------- | ------------ | -------------- | -------------- | ---------- | ---------- | -------------- |
+| 1080p30 | 190          | 16.8           | **30.1**       | 26.4       | 46.9       | 40 ms          |
+| 1080p60 | 172          | 20.2           | **38.7**       | 28.3       | 54.6       | 345 ms         |
+| 2K30    | 235          | 12.9           | **19.9**       | 25.0       | 38.4       | 69 ms          |
+| 2K60    | 236          | 10.9           | **19.5**       | 21.1       | 37.7       | 122 ms         |
+| 4K30    | 942          | 3.0            | **4.4**        | 22.9       | 34.0       | 348 ms         |
+
+What this shows:
+
+- **The window was a limit, and widening it helps every mode above 1080p.** At 1080p30 the phone's counters
+  show why: with the old window the next frame was asked for 30 ms after the last was handed over (about the
+  acknowledgement time), 17.8 JPEGs a second were made out of the camera's 29.9; with the new one it was asked
+  for after 0.1 ms and all 29.9 were made. 1080p30 now holds the full 30 fps (worst second 29).
+- **The next limit looks like the JavaScript thread.** With the new window the hand-over to the socket takes
+  about 16 ms per frame at 1080p30 (30 frames a second, under half of every second) and 27 ms at 1080p60 (172 KB);
+  at 36.5 frames a second that is about 97 percent of every second, so 1080p60 stops where the thread is full.
+  The modes that did not reach their rate all stop at 34 to 55 Mbit/s, which is 4 to 7 MB/s; for 2K and 4K the
+  counters of the new run are missing, so that they stop for the same reason is an inference. This is the
+  base64 work of the section "Where the time of one frame goes", now unblocked.
+- **A larger window costs latency.** The time from sending a frame to its acknowledgement rose (1080p60: 24 to
+  55 ms) because frames wait their turn. The time from the camera to the screen was not measured.
+- **A frame's size depends on the scene.** The same modes made 144 to 159 KB frames at 1080p and 626 to 749 KB at
+  4K earlier in the evening, and 172 to 192 KB and 940 KB here, so every figure here is for one scene; that
+  is why each pair was measured back to back.
+
+Not measured in this part: the phone's counters for 2K and 4K (the console capture stopped), 720p with the new
+window, and any Wi-Fi other than the one above.
+
 ## Android: OPPO A9 2020
 
 The same evening, with the same Mac and Wi-Fi: an OPPO A9 2020 (CPH1941), Android 11, Snapdragon 665, a Release
@@ -159,11 +196,12 @@ beyond receiving the frames (there is no virtual camera yet).
 - With JPEG as it is built now, 480p to 720p60 and 1080p30 run at the requested rate on a cool phone, 1080p60
   and 2K reach about half to two thirds of it, and 4K about a sixth. The gate for what is offered is
   `CODEC_TRIED` in `mobile/src/core/videoModes.ts`; it should follow these numbers.
-- Two changes are suggested by the measurements and are not tried: letting more than one frame be in flight
-  whatever its size (a policy of the sender, protocol section 8.4), which should remove the acknowledgement
-  wait from the cycle and so the steps in the frame rate, and handing the frame to the network from native code
-  instead of through React Native's `WebSocket`, which would take the base64 work off the JavaScript thread.
-  Neither helps the frame size itself: at 4K a JPEG is 630 to 750 KB.
+- Letting more than one frame be in flight whatever its size (a policy of the sender, protocol section 8.4) was
+  tried on the iPhone and measured (previous section): 1080p30 went from 16.8 to 30.1 fps and 1080p60 from 20.2
+  to 38.7, at the price of some latency, which was not measured. The next change would be handing the frame to
+  the network from native code instead of through React Native's `WebSocket`, which would take the base64 work
+  off the JavaScript thread; it was not tried. Neither helps the frame size itself: at 4K a JPEG is 630 to
+  950 KB.
 - The modes above 1080p, and any sustained run on a phone that heats up, are expected to need a hardware
   encoder (H.264 or HEVC) and a decoder on the PC (protocol section 8.7).
 - On a phone of the OPPO's class, JPEG on Android can only be offered at 480p today, and the sizes it offers should
