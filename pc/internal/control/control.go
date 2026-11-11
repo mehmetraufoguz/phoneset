@@ -24,6 +24,7 @@ import (
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/app"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/icons"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/proto"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/store"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/video"
 )
@@ -87,6 +88,7 @@ func Serve(ctx context.Context, dir, mode string, args []string, h Handler, stop
 	}))
 	// The camera of a phone (docs/protocol.md, section 9). Same listener, same token, same Host check.
 	mux.HandleFunc("GET /video.mjpg", s.guard(s.mjpeg))
+	mux.HandleFunc("GET /video.h264", s.guard(s.h264))
 	mux.HandleFunc("GET /video.jpg", s.guard(s.snapshot))
 	mux.HandleFunc("GET /video", s.guard(s.videoPage))
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -214,16 +216,64 @@ func (a *api) mjpeg(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case f := <-sub.C:
+			if f.Codec != proto.CodecByteJPEG {
+				continue // this stream carries another codec: there is no picture to show here
+			}
 			// A reader that stopped reading must not hold the connection forever.
 			_ = rc.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if _, err := fmt.Fprintf(w, "Content-Type: image/jpeg\r\nContent-Length: %d\r\nX-Phoneset-Seq: %d\r\n\r\n",
-				len(f.JPEG), f.Seq); err != nil {
+				len(f.Data), f.Seq); err != nil {
 				return
 			}
-			if _, err := w.Write(f.JPEG); err != nil {
+			if _, err := w.Write(f.Data); err != nil {
 				return
 			}
 			if _, err := fmt.Fprintf(w, "\r\n--%s\r\n", mjpegBoundary); err != nil {
+				return
+			}
+			if rc.Flush() != nil {
+				return
+			}
+		}
+	}
+}
+
+// h264 streams the camera as a raw Annex B byte stream, which is what ffplay and ffmpeg read as "h264".
+// It starts at a key frame, and when this reader missed a frame (the hub hands a slow reader only the
+// newest) it waits for the next key frame again, so a decoder never sees a gap in the middle of a
+// sequence of frames that depend on each other.
+func (a *api) h264(w http.ResponseWriter, r *http.Request) {
+	sub := a.h.Video().Subscribe()
+	defer sub.Close()
+	w.Header().Set("Content-Type", "video/h264")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	rc := http.NewResponseController(w)
+	if rc.Flush() != nil {
+		return
+	}
+	var next uint32
+	synced := false
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case f := <-sub.C:
+			if f.Codec != proto.CodecByteH264 {
+				continue
+			}
+			if synced && f.Seq != next {
+				synced = false
+			}
+			if !synced {
+				if !f.Key {
+					continue
+				}
+				synced = true
+			}
+			next = f.Seq + 1
+			_ = rc.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if _, err := w.Write(f.Data); err != nil {
 				return
 			}
 			if rc.Flush() != nil {
@@ -239,10 +289,14 @@ func (a *api) snapshot(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "no camera frame yet", http.StatusNotFound)
 		return
 	}
+	if f.Codec != proto.CodecByteJPEG {
+		http.Error(w, "the camera is sending h264, which is not a picture to save; read /video.h264", http.StatusUnsupportedMediaType)
+		return
+	}
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	_, _ = w.Write(f.JPEG)
+	_, _ = w.Write(f.Data)
 }
 
 func (a *api) videoPage(w http.ResponseWriter, _ *http.Request) {
@@ -315,6 +369,9 @@ func (c *Client) VideoURL() string { return c.url("/video?t=" + c.Info.Token) }
 
 // MJPEGURL is the raw stream: multipart/x-mixed-replace, for programs that read MJPEG.
 func (c *Client) MJPEGURL() string { return c.url("/video.mjpg?t=" + c.Info.Token) }
+
+// H264URL is the raw Annex B stream of an h264 camera, for ffplay, ffmpeg and the like.
+func (c *Client) H264URL() string { return c.url("/video.h264?t=" + c.Info.Token) }
 
 // PairPageURL is the pairing page, with the token so a browser may open it.
 func (c *Client) PairPageURL() string { return c.url("/pair?t=" + c.Info.Token) }

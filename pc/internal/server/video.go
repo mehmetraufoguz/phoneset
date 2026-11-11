@@ -29,7 +29,7 @@ import (
 
 // videoCodecs are the codecs this PC accepts. It relays JPEG frames without decoding them; a codec
 // that needs a decoder is added here when its payload is defined (docs/protocol.md, section 8.7).
-var videoCodecs = []string{proto.CodecJPEG}
+var videoCodecs = []string{proto.CodecJPEG, proto.CodecH264}
 
 // Bounds for a mode the phone asks for. The 16-bit sizes of the frame header are the real limit.
 const (
@@ -270,9 +270,14 @@ func (s *Server) onVideo(ctx context.Context, vc *videoConn, body []byte) {
 	codec := body[8]
 	w, h := int(binary.BigEndian.Uint16(body[10:12])), int(binary.BigEndian.Uint16(body[12:14]))
 	payload := body[proto.VideoHeaderLen:]
-	if vc.mode.Codec == proto.CodecJPEG && codec == proto.CodecByteJPEG && isJPEG(payload) && w > 0 && h > 0 {
+	key := body[9]&1 == 1
+	good := w > 0 && h > 0 &&
+		(vc.mode.Codec == proto.CodecJPEG && codec == proto.CodecByteJPEG && isJPEG(payload) ||
+			vc.mode.Codec == proto.CodecH264 && codec == proto.CodecByteH264 && isAnnexB(payload))
+	if good {
 		s.video.Publish(&video.Frame{
-			Seq: seq, CapturedMs: binary.BigEndian.Uint32(body[4:8]), Width: w, Height: h, JPEG: payload,
+			Seq: seq, CapturedMs: binary.BigEndian.Uint32(body[4:8]), Width: w, Height: h,
+			Codec: codec, Key: key, Data: payload,
 		})
 	} else if vc.bad++; vc.bad == 1 {
 		s.log.Warn("ignored a camera frame that is not what the mode says", "codec", codec, "bytes", len(payload))
@@ -283,6 +288,15 @@ func (s *Server) onVideo(ctx context.Context, vc *videoConn, body []byte) {
 
 func isJPEG(b []byte) bool {
 	return len(b) >= 4 && len(b) <= proto.MaxVideoFrame && b[0] == 0xFF && b[1] == 0xD8
+}
+
+// isAnnexB reports whether b starts with an Annex B start code (00 00 01 or 00 00 00 01), which is as
+// much as is checked: the PC does not decode h264.
+func isAnnexB(b []byte) bool {
+	if len(b) < 5 || len(b) > proto.MaxVideoFrame {
+		return false
+	}
+	return b[0] == 0 && b[1] == 0 && (b[2] == 1 || b[2] == 0 && b[3] == 1)
 }
 
 func (s *Server) sendVideoStats(ctx context.Context, vc *videoConn) {

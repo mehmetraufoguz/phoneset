@@ -7,13 +7,15 @@ import (
 	"time"
 )
 
-// Frame is one JPEG picture. It is immutable once published, so readers share it.
+// Frame is one coded picture. It is immutable once published, so readers share it.
 type Frame struct {
 	Seq        uint32
 	CapturedMs uint32 // the phone's steady clock, wraps; only differences mean anything
 	Width      int
 	Height     int
-	JPEG       []byte
+	Codec      byte   // proto.CodecByteJPEG or proto.CodecByteH264
+	Key        bool   // can be decoded on its own
+	Data       []byte // a JPEG, or one Annex B access unit for h264
 	Received   time.Time
 }
 
@@ -123,8 +125,8 @@ func (h *Hub) Publish(f *Frame) {
 	f.Received = time.Now()
 	h.latest = f
 	h.frames++
-	h.bytes += uint64(len(f.JPEG))
-	h.ring[h.count%rateWindow] = arrival{at: f.Received, size: len(f.JPEG)}
+	h.bytes += uint64(len(f.Data))
+	h.ring[h.count%rateWindow] = arrival{at: f.Received, size: len(f.Data)}
 	h.count++
 	for s := range h.subs {
 		select {
