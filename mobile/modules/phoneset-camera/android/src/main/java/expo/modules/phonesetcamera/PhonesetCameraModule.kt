@@ -23,10 +23,13 @@ class PhonesetCameraModule : Module() {
       context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
     }
 
-    AsyncFunction("start") { facing: String, width: Int, height: Int, fps: Int, quality: Int, promise: Promise ->
+    AsyncFunction("start") { facing: String, width: Int, height: Int, fps: Int, quality: Int, codec: String, promise: Promise ->
       // The camera follows the screen's lifecycle: it works while phoneset is in front.
       val owner = appContext.currentActivity as? LifecycleOwner
-      if (owner == null) {
+      if (codec != "jpeg") {
+        // Only JPEG is made on Android so far.
+        promise.reject("ERR_PHONESET_CAMERA", "This phone can't send $codec video yet.", null)
+      } else if (owner == null) {
         promise.reject("ERR_PHONESET_CAMERA", "phoneset has to be in front to use the camera.", null)
       } else {
         source.start(owner, facing, width, height, fps, quality) { error ->

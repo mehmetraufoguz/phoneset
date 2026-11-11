@@ -19,9 +19,10 @@ public class PhonesetCameraModule: Module {
       AVCaptureDevice.default(for: .video) != nil
     }
 
-    AsyncFunction("start") { (facing: String, width: Int, height: Int, fps: Int, quality: Int) throws in
+    AsyncFunction("start") { (facing: String, width: Int, height: Int, fps: Int, quality: Int, codec: String) throws in
       do {
-        try self.camera.start(facing: facing, width: width, height: height, fps: fps, quality: quality)
+        try self.camera.start(
+          facing: facing, width: width, height: height, fps: fps, quality: quality, codec: codec)
       } catch let failure as CameraFailure {
         throw CameraException(failure.message)
       }

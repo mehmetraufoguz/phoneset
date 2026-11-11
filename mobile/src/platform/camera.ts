@@ -9,7 +9,14 @@ import { CameraError } from "../core/errors"
 // missing (a development build made before it was added) the camera is simply not offered.
 interface PhonesetCameraModule {
   isAvailable(): boolean
-  start(facing: string, width: number, height: number, fps: number, quality: number): Promise<void>
+  start(
+    facing: string,
+    width: number,
+    height: number,
+    fps: number,
+    quality: number,
+    codec: string
+  ): Promise<void>
   nextFrame(): Promise<unknown>
   capabilities(facing: string): CameraCapabilities
   stop(): void
@@ -53,7 +60,8 @@ export const CameraLive = Layer.succeed(CameraIO, {
         return yield* new CameraError({ message: "This phone can't send its camera yet." })
       yield* Effect.acquireRelease(
         Effect.tryPromise({
-          try: () => module.start(facing, mode.width, mode.height, mode.fps, VIDEO_QUALITY),
+          try: () =>
+            module.start(facing, mode.width, mode.height, mode.fps, VIDEO_QUALITY, mode.codec),
           catch: failure("The camera didn't start.")
         }),
         () => Effect.sync(() => module.stop())

@@ -24,8 +24,19 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   private let ciContext = CIContext()
   private let lock = NSLock()
 
+  private static let codecH264: UInt8 = 2
+
   private var waiter: Callback?
   private var minInterval: CFAbsoluteTime = 1.0 / 30
+
+  // h264: a picture is handed to the coder (on the capture queue) and comes back on another thread, so
+  // the callback that is waiting for it is kept here until then. There is one at most: JavaScript asks
+  // for the next frame only when it has the last.
+  private var codec = "jpeg"
+  private var askedFps = 30
+  private var encoder: PhonesetH264Encoder?
+  private var inFlight: (callback: Callback, number: UInt32, captured: UInt32, started: CFAbsoluteTime)?
+  private var needKey = true
   private var quality: CGFloat = 0.7
   private var lastEncode: CFAbsoluteTime = 0
   private var seq: UInt32 = 0
@@ -40,8 +51,11 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   private var height = 0
 
   /// Opens the camera. Blocks until it runs, so call it off the main thread.
-  func start(facing: String, width: Int, height: Int, fps: Int, quality: Int) throws {
+  func start(facing: String, width: Int, height: Int, fps: Int, quality: Int, codec: String) throws {
     stop()
+    guard codec == "jpeg" || codec == "h264" else {
+      throw CameraFailure(message: "This phone can't send \(codec) video.")
+    }
     let position: AVCaptureDevice.Position = facing == "front" ? .front : .back
     guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
       let input = try? AVCaptureDeviceInput(device: device)
@@ -75,7 +89,11 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     let output = AVCaptureVideoDataOutput()
     // Pictures that arrive while the last is still being worked on are dropped by the system.
     output.alwaysDiscardsLateVideoFrames = true
-    output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+    // JPEG is made from RGB; the coder takes the camera's own YUV pictures, with no conversion.
+    output.videoSettings = [
+      kCVPixelBufferPixelFormatTypeKey as String: codec == "h264"
+        ? kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange : kCVPixelFormatType_32BGRA
+    ]
     output.setSampleBufferDelegate(self, queue: queue)
     guard session.canAddOutput(output) else {
       session.commitConfiguration()
@@ -97,6 +115,9 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     session.commitConfiguration()
 
     lock.lock()
+    self.codec = codec
+    self.askedFps = min(60, max(1, fps))
+    self.needKey = true
     self.quality = CGFloat(min(95, max(30, quality))) / 100
     self.minInterval = 1.0 / Double(min(60, max(1, fps)))
     self.seq = 0
@@ -121,8 +142,14 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     lock.lock()
     let pending = waiter
     waiter = nil
+    let coded = inFlight
+    inFlight = nil
+    let coder = encoder
+    encoder = nil
     lock.unlock()
+    coder?.invalidate()
     pending?(nil, "The camera was stopped.")
+    coded?.callback(nil, "The camera was stopped.")
   }
 
   /// Waits for the next frame. A call replaces one that is still waiting.
@@ -159,6 +186,14 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     }
     let w = CVPixelBufferGetWidth(pixels)
     let h = CVPixelBufferGetHeight(pixels)
+    // The presentation time is on the phone's steady clock.
+    let captured = UInt32(truncatingIfNeeded: Int(CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds * 1000))
+    if codec == "h264" {
+      code(
+        pixels, at: CMSampleBufferGetPresentationTimeStamp(sampleBuffer), callback: callback, number: number,
+        captured: captured, width: w, height: h, started: now)
+      return
+    }
     guard
       let jpeg = ciContext.jpegRepresentation(
         of: CIImage(cvPixelBuffer: pixels), colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -168,8 +203,6 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
       return
     }
 
-    // The presentation time is on the phone's steady clock.
-    let captured = UInt32(truncatingIfNeeded: Int(CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds * 1000))
     var frame = Data(capacity: Self.headerLength + jpeg.count)
     frame.append(contentsOf: Self.bigEndian(number))
     frame.append(contentsOf: Self.bigEndian(captured))
@@ -187,6 +220,87 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     height = h
     lock.unlock()
     callback(frame, nil)
+  }
+
+  /// h264: hands one picture to the coder; `deliver` makes the frame when the coder has it.
+  private func code(
+    _ pixels: CVPixelBuffer, at time: CMTime, callback: @escaping Callback, number: UInt32, captured: UInt32,
+    width w: Int, height h: Int, started: CFAbsoluteTime
+  ) {
+    lock.lock()
+    var coder = encoder
+    let forceKey = needKey
+    needKey = false
+    inFlight = (callback, number, captured, started)
+    width = w
+    height = h
+    lock.unlock()
+
+    if coder == nil {
+      // About 0.1 bit per pixel: 6 Mbit/s at 1080p30, 25 at 4K30, which the link and the phone carry.
+      let bitrate = max(1_500_000, min(60_000_000, Int(Double(w * h) * Double(askedFps) * 0.1)))
+      coder = PhonesetH264Encoder(width: w, height: h, fps: askedFps, bitrate: bitrate) { [weak self] unit, failure in
+        self?.deliver(unit, failure)
+      }
+      lock.lock()
+      encoder = coder
+      lock.unlock()
+    }
+    guard let coder else {
+      fail("This phone has no hardware H.264 coder for \(w) x \(h).")
+      return
+    }
+    if !coder.encode(pixels, at: time, forceKey: forceKey) {
+      fail("Couldn't hand the picture to the video coder.")
+    }
+  }
+
+  /// Ends the frame that was being coded with a message, and makes the next one a key frame.
+  private func fail(_ message: String) {
+    lock.lock()
+    let failed = inFlight
+    inFlight = nil
+    needKey = true
+    lock.unlock()
+    failed?.callback(nil, message)
+  }
+
+  /// h264: the coder has (or has dropped) the picture that was handed to it.
+  private func deliver(_ unit: PhonesetH264Encoder.Unit?, _ failure: String?) {
+    lock.lock()
+    let pending = inFlight
+    inFlight = nil
+    if unit == nil && failure == nil { needKey = true }  // dropped: the next picture starts a new sequence
+    let w = width
+    let h = height
+    lock.unlock()
+    guard let pending else { return }
+    if let failure {
+      pending.callback(nil, failure)
+      return
+    }
+    guard let unit else {
+      // The coder dropped it: wait for the next picture with the same request.
+      lock.lock()
+      if waiter == nil { waiter = pending.callback }
+      lock.unlock()
+      return
+    }
+    var frame = Data(capacity: Self.headerLength + unit.data.count)
+    frame.append(contentsOf: Self.bigEndian(pending.number))
+    frame.append(contentsOf: Self.bigEndian(pending.captured))
+    frame.append(Self.codecH264)
+    frame.append(unit.key ? Self.flagKey : 0)
+    frame.append(contentsOf: Self.bigEndian(UInt16(truncatingIfNeeded: w)))
+    frame.append(contentsOf: Self.bigEndian(UInt16(truncatingIfNeeded: h)))
+    frame.append(unit.data)
+
+    lock.lock()
+    encoded += 1
+    encodeSeconds += CFAbsoluteTimeGetCurrent() - pending.started  // from the picture to the coded unit
+    jpegBytes += unit.data.count  // the size of what was coded, whichever codec
+    lock.unlock()
+    pending.callback(frame, nil)
   }
 
   /// What the camera side has done since it started, for measuring.
