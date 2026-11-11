@@ -210,15 +210,21 @@ export const runVideo = Effect.fn("Video.run")(function* (
   // counted as in flight the moment it exists, so the window still decides when the next one is made.
   const pull = window.ready.pipe(Effect.andThen(session.next))
   const pump = Effect.gen(function* () {
-    let pending = yield* Effect.forkChild(pull)
+    // A hardware coder takes a while to answer; asking for the next picture before the last has come
+    // back keeps it busy, so its delay does not become the frame period. JPEG is made on the camera's own
+    // thread and answers at once, and Android's source takes one request at a time: one pull.
+    const depth = mode.codec === "h264" ? 2 : 1
+    const pendings = [yield* Effect.forkChild(pull)]
+    for (let i = 1; i < depth; i++) pendings.push(yield* Effect.forkChild(pull))
     while (true) {
+      const pending = pendings.shift() as (typeof pendings)[number]
       const frame = yield* Fiber.join(pending)
       // Header: seq (u32), time, width, height. The sequence number is the first four bytes.
       const seq = new DataView(frame.buffer, frame.byteOffset, 4).getUint32(0, false)
       window.sent(seq, frame.length)
       sentFrames++
       sentBytes += frame.length
-      pending = yield* Effect.forkChild(pull)
+      pendings.push(yield* Effect.forkChild(pull))
       // Let the pull reach the camera before the heavy part (sealing and base64) takes the thread.
       yield* Effect.yieldNow
       const before = Date.now()

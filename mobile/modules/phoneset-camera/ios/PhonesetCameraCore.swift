@@ -26,7 +26,9 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
 
   private static let codecH264: UInt8 = 2
 
-  private var waiter: Callback?
+  // Callbacks waiting for a picture, oldest first: JavaScript may ask for the next frame before it has the last
+  // (more than one picture in the coder at once hides the coder's own delay).
+  private var waiters: [Callback] = []
   private var minInterval: CFAbsoluteTime = 1.0 / 30
 
   // h264: a picture is handed to the coder (on the capture queue) and comes back on another thread, so
@@ -35,7 +37,7 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   private var codec = "jpeg"
   private var askedFps = 30
   private var encoder: PhonesetH264Encoder?
-  private var inFlight: (callback: Callback, number: UInt32, captured: UInt32, started: CFAbsoluteTime)?
+  private var inFlight: [(callback: Callback, number: UInt32, captured: UInt32, started: CFAbsoluteTime)] = []
   private var needKey = true
   private var quality: CGFloat = 0.7
   private var lastEncode: CFAbsoluteTime = 0
@@ -140,23 +142,23 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     session.outputs.forEach { session.removeOutput($0) }
     session.commitConfiguration()
     lock.lock()
-    let pending = waiter
-    waiter = nil
+    let pending = waiters
+    waiters = []
     let coded = inFlight
-    inFlight = nil
+    inFlight = []
     let coder = encoder
     encoder = nil
     lock.unlock()
     coder?.invalidate()
-    pending?(nil, "The camera was stopped.")
-    coded?.callback(nil, "The camera was stopped.")
+    pending.forEach { $0(nil, "The camera was stopped.") }
+    coded.forEach { $0.callback(nil, "The camera was stopped.") }
   }
 
   /// Waits for the next frame. A call replaces one that is still waiting.
   func next(_ callback: @escaping Callback) {
     lock.lock()
-    let replaced = waiter
-    waiter = callback
+    waiters.append(callback)
+    let replaced: Callback? = waiters.count > 4 ? waiters.removeFirst() : nil
     lock.unlock()
     replaced?(nil, "Another frame was asked for.")
   }
@@ -169,11 +171,11 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     analysed += 1
     // Nobody is ready for a picture, or it is faster than asked for (a little early still counts, since the
     // camera's own rate is never exactly even): it is dropped, with no work done.
-    guard let callback = waiter, now - lastEncode >= minInterval * 0.85 else {
+    guard !waiters.isEmpty, now - lastEncode >= minInterval * 0.85 else {
       lock.unlock()
       return
     }
-    waiter = nil
+    let callback = waiters.removeFirst()
     lastEncode = now
     let quality = self.quality
     let number = seq
@@ -231,7 +233,7 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     var coder = encoder
     let forceKey = needKey
     needKey = false
-    inFlight = (callback, number, captured, started)
+    inFlight.append((callback, number, captured, started))
     width = w
     height = h
     lock.unlock()
@@ -255,11 +257,10 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     }
   }
 
-  /// Ends the frame that was being coded with a message, and makes the next one a key frame.
+  /// Ends the picture that was just handed over (and was refused) with a message; the next one is a key frame.
   private func fail(_ message: String) {
     lock.lock()
-    let failed = inFlight
-    inFlight = nil
+    let failed = inFlight.popLast()
     needKey = true
     lock.unlock()
     failed?.callback(nil, message)
@@ -268,9 +269,8 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   /// h264: the coder has (or has dropped) the picture that was handed to it.
   private func deliver(_ unit: PhonesetH264Encoder.Unit?, _ failure: String?) {
     lock.lock()
-    let pending = inFlight
-    inFlight = nil
-    if unit == nil && failure == nil { needKey = true }  // dropped: the next picture starts a new sequence
+    let pending = inFlight.isEmpty ? nil : inFlight.removeFirst()  // the coder answers in the order it was given pictures
+    if unit == nil { needKey = true }  // dropped or failed: the next picture starts a new sequence
     let w = width
     let h = height
     lock.unlock()
@@ -282,7 +282,7 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     guard let unit else {
       // The coder dropped it: wait for the next picture with the same request.
       lock.lock()
-      if waiter == nil { waiter = pending.callback }
+      waiters.insert(pending.callback, at: 0)
       lock.unlock()
       return
     }
