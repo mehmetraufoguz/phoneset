@@ -24,6 +24,15 @@ class CameraFailure(message: String) : Exception(message)
 
 typealias FrameCallback = (frame: ByteArray?, error: Throwable?) -> Unit
 
+/** A source of frames for JavaScript to pull: JPEG ([FrameSource]) or H.264 ([H264Source]). */
+interface FrameProvider {
+  /** Waits for the next frame; the callback gets the frame message body, or an error. */
+  fun next(callback: FrameCallback)
+  fun stop()
+  /** What the camera side has done since it started, for measuring. */
+  fun stats(): Map<String, Any>
+}
+
 /**
  * The phone's camera as a source of JPEG frames, with no Expo types in it.
  *
@@ -36,7 +45,7 @@ typealias FrameCallback = (frame: ByteArray?, error: Throwable?) -> Unit
  * codec (u8), flags (u8), width (u16), height (u16), then the JPEG. The picture is upright and not
  * mirrored.
  */
-class FrameSource(private val context: Context) {
+class FrameSource(private val context: Context) : FrameProvider {
   private val analysisExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "phoneset-camera") }
   private val waiter = AtomicReference<FrameCallback?>(null)
   private val jpeg = ByteArrayOutputStream(256 * 1024)
@@ -125,7 +134,7 @@ class FrameSource(private val context: Context) {
   }
 
   /** Stops the camera and fails whoever was waiting for a frame. */
-  fun stop() {
+  override fun stop() {
     ContextCompat.getMainExecutor(context).execute { stopOnMain() }
     waiter.getAndSet(null)?.invoke(null, CameraFailure("The camera was stopped."))
   }
@@ -136,7 +145,7 @@ class FrameSource(private val context: Context) {
   }
 
   /** Waits for the next frame. A call replaces one that is still waiting. */
-  fun next(callback: FrameCallback) {
+  override fun next(callback: FrameCallback) {
     waiter.getAndSet(callback)?.invoke(null, CameraFailure("Another frame was asked for."))
   }
 
@@ -211,7 +220,7 @@ class FrameSource(private val context: Context) {
   }
 
   /** What the camera side has done since it started, for measuring. */
-  fun stats(): Map<String, Any> = synchronized(lock) {
+  override fun stats(): Map<String, Any> = synchronized(lock) {
     val seconds = maxOf(1L, SystemClock.elapsedRealtime() - startedMs) / 1000.0
     mapOf(
       "width" to width,

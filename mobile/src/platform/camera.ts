@@ -1,7 +1,6 @@
 import { Effect, Layer } from "effect"
 import { requireOptionalNativeModule } from "expo"
 import { Camera } from "expo-camera"
-import { Platform } from "react-native"
 import { type CameraCapabilities, CameraIO, type CameraStats } from "../core/camera"
 import { VIDEO_QUALITY } from "../core/constants"
 import { CameraError } from "../core/errors"
@@ -48,8 +47,8 @@ const ensurePermission = Effect.tryPromise({
 
 export const CameraLive = Layer.succeed(CameraIO, {
   available: native?.isAvailable() === true,
-  // h264 is coded in hardware by the iOS module only; Android makes JPEG.
-  codecs: Platform.OS === "ios" ? ["jpeg", "h264"] : ["jpeg"],
+  // JPEG is made on the CPU and h264 by the hardware encoder, on both platforms.
+  codecs: ["jpeg", "h264"],
   ensurePermission,
   capabilities: (facing) =>
     Effect.try({

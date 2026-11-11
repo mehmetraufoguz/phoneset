@@ -15,6 +15,10 @@ class PhonesetCameraModule : Module() {
     get() = appContext.reactContext ?: throw IllegalStateException("React context is gone")
 
   private val source by lazy { FrameSource(context.applicationContext) }
+  private val h264 by lazy { H264Source(context.applicationContext) }
+
+  /** The source the camera was last started with; frames are pulled from it. */
+  @Volatile private var current: FrameProvider? = null
 
   override fun definition() = ModuleDefinition {
     Name("PhonesetCamera")
@@ -26,23 +30,34 @@ class PhonesetCameraModule : Module() {
     AsyncFunction("start") { facing: String, width: Int, height: Int, fps: Int, quality: Int, codec: String, promise: Promise ->
       // The camera follows the screen's lifecycle: it works while phoneset is in front.
       val owner = appContext.currentActivity as? LifecycleOwner
-      if (codec != "jpeg") {
-        // Only JPEG is made on Android so far.
-        promise.reject("ERR_PHONESET_CAMERA", "This phone can't send $codec video yet.", null)
-      } else if (owner == null) {
+      val finished = { error: Throwable? ->
+        if (error == null) promise.resolve()
+        else promise.reject("ERR_PHONESET_CAMERA", error.message ?: "The camera didn't start.", error)
+      }
+      if (owner == null) {
         promise.reject("ERR_PHONESET_CAMERA", "phoneset has to be in front to use the camera.", null)
+      } else if (codec == "jpeg") {
+        h264.stop()
+        current = source
+        source.start(owner, facing, width, height, fps, quality, finished)
+      } else if (codec == "h264") {
+        source.stop()
+        current = h264
+        h264.start(owner, facing, width, height, fps, finished)
       } else {
-        source.start(owner, facing, width, height, fps, quality) { error ->
-          if (error == null) promise.resolve()
-          else promise.reject("ERR_PHONESET_CAMERA", error.message ?: "The camera didn't start.", error)
-        }
+        promise.reject("ERR_PHONESET_CAMERA", "This phone can't send $codec video.", null)
       }
     }
 
     AsyncFunction("nextFrame") { promise: Promise ->
-      source.next { frame, error ->
-        if (frame != null) promise.resolve(frame)
-        else promise.reject("ERR_PHONESET_CAMERA", error?.message ?: "No frame.", error)
+      val from = current
+      if (from == null) {
+        promise.reject("ERR_PHONESET_CAMERA", "The camera is not running.", null)
+      } else {
+        from.next { frame, error ->
+          if (frame != null) promise.resolve(frame)
+          else promise.reject("ERR_PHONESET_CAMERA", error?.message ?: "No frame.", error)
+        }
       }
     }
 
@@ -51,10 +66,17 @@ class PhonesetCameraModule : Module() {
 
     Function("encoders") { Capabilities.encoders() }
 
-    Function("stop") { source.stop() }
+    Function("stop") {
+      source.stop()
+      h264.stop()
+      current = null
+    }
 
-    Function("stats") { source.stats() }
+    Function("stats") { (current ?: source).stats() }
 
-    OnDestroy { source.stop() }
+    OnDestroy {
+      source.stop()
+      h264.stop()
+    }
   }
 }

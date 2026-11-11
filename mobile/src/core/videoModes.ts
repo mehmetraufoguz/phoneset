@@ -23,8 +23,8 @@ export const RATES = [30, 60] as const
 export const CODEC_TRIED: Record<string, { readonly maxHeight: number; readonly maxFps: number }> =
   {
     jpeg: { maxHeight: 720, maxFps: 30 },
-    // Experimental: coded in hardware on the iPhone, relayed by the PC to /video.h264 and not decoded
-    // there (docs/protocol.md, section 8.7). Android does not make it yet.
+    // Experimental: coded in hardware on the phone, relayed by the PC to /video.h264 and not decoded
+    // there (docs/protocol.md, section 8.7).
     h264: { maxHeight: 2160, maxFps: 60 }
   }
 
