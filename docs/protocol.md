@@ -261,6 +261,14 @@ Type `0x04` carries one frame:
 The header is 14 bytes. The `codec` must be the one of the `mode` in effect; a frame with another is
 dropped like one that does not decode. For `jpeg` the payload is a complete baseline JPEG that starts with
 `FF D8`, and every frame is a key frame (`flags` 1): nothing depends on an earlier frame.
+For `h264` the payload is one access unit, one coded picture, in Annex B byte-stream format: NAL units each
+preceded by the start code `00 00 00 01`. The stream has no B-frames, so frames come out in the order they go
+in. A key frame (`flags` 1) is an IDR picture and has the SPS and PPS NAL units in front of it in the same
+message, so a receiver can start decoding at any key frame; the other frames carry no parameter sets. The
+first frame of a stream is a key frame and one is made at least every 2 seconds. A frame depends on the
+ones before it, so a sender never drops a frame after it was coded (it drops before coding, 8.4), and a
+receiver that missed one waits for the next key frame. This payload is defined for measuring (8.7); the PC
+passes it on unchanged and does not decode it.
 The picture is already upright: the phone rotates it, and `width` and `height` are the upright size. The
 front camera is not mirrored. As a guide, a 1280 x 720 JPEG at quality 70 is about 50 to 120 KB. A frame
 that is not what it says it is is dropped (and acknowledged, 8.4) and the connection stays. A sender must
@@ -311,10 +319,12 @@ understand.
 
 ### 8.7 Adding a codec
 
-`jpeg` is the only codec defined. `h264` and `hevc` have numbers (2 and 3) so that nothing has to move
-when they are defined, but their payload (Annex B or length-prefixed units, where the parameter sets
-go, what a key frame is) is not written yet, and a phone does not offer them in `modes`, and a PC does
-not list them in `codecs`, until it is. Coding one with a hardware encoder on the phone and showing it
+`jpeg` and `h264` are defined (8.3); `hevc` has the number 3 so that nothing has to move when it is, but
+its payload (where the parameter sets go, what a key frame is) is not written yet, and a phone does not
+offer it in `modes`, and a PC does not list it in `codecs`, until it is. `h264` was added to measure
+whether a hardware coder lifts the limits that JPEG has (`docs/webcam-measurements.md`); a PC lists it in
+`codecs` and relays it to the local `/video.h264` address, and a decoder for it on the PC is not part of
+this program yet. Coding one with a hardware encoder on the phone and showing it
 on the PC needs a decoder that is not in this program's standard library; that is the reason for the
 split between the codec in the message and the codecs a PC accepts. A new codec is a new value in an
 existing field, negotiated with `codecs` and `modes`, so it is not a new protocol version.
@@ -346,6 +356,7 @@ check that `phoneset status` uses, so nothing is reachable from the network:
 | `GET /video.mjpg?t=<token>` | `multipart/x-mixed-replace`: every frame as one `image/jpeg` part, newest first, for as long as the client reads |
 | `GET /video.jpg?t=<token>`  | the latest frame as one JPEG (404 until there is one)                                                            |
 | `GET /video?t=<token>`      | a page that shows the stream in a browser                                                                        |
+| `GET /video.h264?t=<token>` | for an `h264` camera: the raw Annex B stream, starting at a key frame (what `ffplay` and `ffmpeg` read as h264)   |
 
 `phoneset video` prints the address, and `phoneset status` shows it while a phone is sending video. A
 reader that is slower than the phone gets the newest frame and misses the ones in between; it never
