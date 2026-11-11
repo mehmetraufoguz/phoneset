@@ -36,3 +36,11 @@ __tests__/
 
 # App Store Connect setup (ids, review notes, store texts): the repository is public.
 docs/store/private/
+
+# Signing keys and Google Play service account keys: never in the repository.
+*.jks
+*.keystore
+*.p12
+play-service-account*.json
+google-service-account*.json
+mobile/credentials.json
