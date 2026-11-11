@@ -57,6 +57,21 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     }
     session.addInput(input)
 
+    // The camera format that has exactly this size and can run at this rate. Without one, the preset
+    // chosen above stays (640 x 480 or 1280 x 720), which is all this module could do before.
+    if let format = Self.format(of: device, width: width, height: height, fps: fps) {
+      do {
+        try device.lockForConfiguration()
+        device.activeFormat = format  // makes the session's preset "input priority"
+        let frame = CMTime(value: 1, timescale: CMTimeScale(fps))
+        device.activeVideoMinFrameDuration = frame
+        device.activeVideoMaxFrameDuration = frame
+        device.unlockForConfiguration()
+      } catch {
+        // Keep the preset's own format: a picture of the wrong size is better than none.
+      }
+    }
+
     let output = AVCaptureVideoDataOutput()
     // Pictures that arrive while the last is still being worked on are dropped by the system.
     output.alwaysDiscardsLateVideoFrames = true
@@ -210,6 +225,24 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
       ["width": size.0, "height": size.1, "maxFps": best[key] ?? 0]
     }
     return ["id": device.uniqueID, "sizes": list]
+  }
+
+  /// A format of this camera with exactly this size (as the camera lists it, before the picture is turned
+  /// upright) that can deliver this rate; the video-range 4:2:0 ones the camera app itself uses come first.
+  private static func format(of device: AVCaptureDevice, width: Int, height: Int, fps: Int)
+    -> AVCaptureDevice.Format?
+  {
+    let matching = device.formats.filter { format in
+      let size = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+      return Int(size.width) == width && Int(size.height) == height
+        && format.videoSupportedFrameRateRanges.contains {
+          $0.minFrameRate <= Double(fps) && Double(fps) <= $0.maxFrameRate
+        }
+    }
+    return matching.first {
+      CMFormatDescriptionGetMediaSubType($0.formatDescription)
+        == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    } ?? matching.first
   }
 
   private static func bigEndian<T: FixedWidthInteger>(_ value: T) -> [UInt8] {
