@@ -78,13 +78,43 @@ func outbound() string {
 	return ""
 }
 
+// advertiseInterfaces are the interfaces whose addresses go into the mDNS answer: the ones a phone on the
+// network can reach, which are the ones Addrs lists. Without this the library answers with every address
+// of every interface that can multicast, including an alias on the loopback interface (10.77.0.20 on one
+// Mac) and the addresses of VPN and virtual adapters. A phone with Android 13 or older is given only one
+// address by its system, so one that is not reachable ends in "Couldn't reach the PC".
+func advertiseInterfaces() []net.Interface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var out []net.Interface
+	for _, ifc := range ifaces {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagMulticast == 0 ||
+			ifc.Flags&(net.FlagLoopback|net.FlagPointToPoint) != 0 || skipped(ifc.Name) {
+			continue
+		}
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok {
+				if ip := ipnet.IP.To4(); ip != nil && ip.IsPrivate() {
+					out = append(out, ifc)
+					break
+				}
+			}
+		}
+	}
+	return out
+}
+
 // Advertise publishes _phoneset._tcp. The returned function stops it.
 func Advertise(id, name string, port int) (func(), error) {
+	// With no usable interface (an unusual network) the library's own choice, all of them, is kept.
 	srv, err := zeroconf.Register(
 		fmt.Sprintf("phoneset-%s", id),
 		proto.ServiceType, "local.", port,
 		[]string{fmt.Sprintf("v=%d", proto.Version), "id=" + id, "n=" + name},
-		nil,
+		advertiseInterfaces(),
 	)
 	if err != nil {
 		return nil, err
