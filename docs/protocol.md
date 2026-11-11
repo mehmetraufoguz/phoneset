@@ -270,7 +270,8 @@ ones before it, so a sender never drops a frame after it was coded (it drops bef
 receiver that missed one waits for the next key frame. This payload is defined for measuring (8.7); the PC
 passes it on unchanged and does not decode it.
 The picture is already upright: the phone rotates it, and `width` and `height` are the upright size. The
-front camera is not mirrored. As a guide, a 1280 x 720 JPEG at quality 70 is about 50 to 120 KB. A frame
+front camera is not mirrored. (Exception for now: an Android phone's `h264` frames are in the camera's own
+orientation, not rotated, so a phone held across is upright; `width` and `height` are the coded size.) As a guide, a 1280 x 720 JPEG at quality 70 is about 50 to 120 KB. A frame
 that is not what it says it is is dropped (and acknowledged, 8.4) and the connection stays. A sender must
 not send more than `maxFrameBytes`: the PC reads messages only slightly larger than that, and ends the
 connection on a bigger one. Until `authed` a message may be at most 64 KiB, as everywhere.

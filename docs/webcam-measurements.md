@@ -234,8 +234,43 @@ What this shows:
 
 Not measured here: how long a run holds once the phone has warmed (the later modes ran on a warm phone), the latency
 from the camera to a picture on the PC, the PC's decoding, other iPhones (the hardware coder is assumed on every
-supported model), Android (MediaCodec was not tried), the front camera, dark scenes (the bit rate depends on the
-scene; these runs had one) and a worse Wi-Fi.
+supported model), the front camera, dark scenes (the bit rate depends on the scene; these runs had one) and a
+worse Wi-Fi. Android is in the next section.
+
+## H.264 in hardware (Android, a prototype)
+
+The same night the OPPO A9 2020 (Snapdragon 665, Android 11) was given the same thing: MediaCodec's `video/avc`
+encoder, fed by CameraX's Preview drawing straight onto the encoder's input surface (no picture is copied or
+converted by the CPU), High profile when the coder accepts it, variable bit rate, a key frame every 2 s, about
+0.1 bit per pixel per frame as the target (at least 1.5 Mbit/s). Frames wait for a request in a queue of 8; when
+it overflows they are all dropped, a key frame is asked for and nothing is sent until it arrives. The same Wi-Fi
+and the same method, 25 s per mode, the back camera.
+
+| Mode asked | Size coded | JPEG fps | JPEG Mbit/s | H.264 fps | H.264 Mbit/s | H.264 KB/frame |
+| ---------- | ---------- | -------- | ----------- | --------- | ------------ | -------------- |
+| 864x480    | 864x480    | 24.2     | 2.8         | 30.0      | 1.5          | 6              |
+| 1600x720   | 1920x1080  | 5.4      | 4.4         | 30.0      | 6.2          | 25             |
+| 2400x1080  | 2688x1512  | 1.3      | 2.5         | 30.1      | 12.2         | 50             |
+| 1920x1440  | 2688x1512  | 1.6      | 3.0         | 30.1      | 12.2         | 50             |
+| 3840x2160  | 3840x2160  | 0.4      | 2.0         | 25.4      | 21.1         | 101            |
+
+What this shows:
+
+- **The hardware coder takes this phone from one usable mode to all of them**: 30 fps up to 2688 x 1512 and 25 fps
+  at 4K, where JPEG made 24, 5, 1.3, 1.6 and 0.4 fps. Below 4K no mode had a gap of 100 ms or more except one of
+  260 ms at 2688 x 1512 (the raw stream has no sequence numbers, so lost frames were not counted here).
+- **At 4K the queue overflowed.** The coder made 27.9 frames a second, but JavaScript pulled and sent about 25 of
+  these 103 KB frames a second, so about 4.6 a second were dropped in the phone (208 in 45 s). Each overflow
+  forces a key frame (17 key frames in 23 s instead of 12) and left 10 gaps over 100 ms, the longest 222 ms. It is
+  the same limit as on the iPhone: the JavaScript hand-over of a large frame.
+- **The size coded is not the mode asked.** CameraX's Preview chooses the size (16:9, the closest larger one), so
+  1600x720 became 1920x1080 and two modes became 2688 x 1512; the coder is made for what CameraX gives and the
+  frame header carries that size. The picture is not rotated (a phone held across is upright).
+- **The battery temperature went from 32 to 39 degrees C** over this run and the earlier ones of the evening.
+
+Not measured here: 60 fps (this phone's camera reports 30 only), the front camera, a run of an hour, the latency,
+other Android phones and coders (this one is a Qualcomm hardware coder; a software one would be slower), and the
+PC's decoding.
 
 ## Not tested
 
@@ -262,5 +297,6 @@ beyond receiving the frames (there is no virtual camera yet).
   5 to 15 times fewer bits than JPEG and 4K to 25 fps. It is the way to offer the tiers that were planned. What it
   needs next is not measured: a decoder on the PC (which the virtual camera needs in any case), the same on Android
   (MediaCodec), the latency, and a run of an hour on a phone that warms up.
-- On a phone of the OPPO's class, JPEG on Android can only be offered at 480p today, and the sizes it offers should
+- On a phone of the OPPO's class, JPEG on Android can only be offered at 480p today (H.264 takes it to 30 fps up to
+  2688 x 1512, previous section), and the sizes it offers should
   be the sizes the module delivers. Whether a faster Android phone does much better was not measured.
