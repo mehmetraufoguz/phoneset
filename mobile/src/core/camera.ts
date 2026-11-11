@@ -48,6 +48,8 @@ export class CameraIO extends Context.Service<
   {
     /** False where the native module is missing or the phone has no camera. */
     readonly available: boolean
+    /** The codecs this phone's camera module can make (iOS: jpeg and h264, Android: jpeg). */
+    readonly codecs: ReadonlyArray<string>
     readonly ensurePermission: Effect.Effect<void, CameraError>
     /** Read from the system, never assumed. */
     readonly capabilities: (facing: Facing) => Effect.Effect<CameraCapabilities, CameraError>

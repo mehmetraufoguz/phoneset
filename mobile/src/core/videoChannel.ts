@@ -143,7 +143,11 @@ export const runVideo = Effect.fn("Video.run")(function* (
   // What this camera reports, what the PC accepts and what has been tried: the modes offered. Nothing
   // here looks at the link; that is for a measurement (docs/protocol.md, section 8.8).
   const caps = yield* camera.capabilities(target.facing)
-  const modes = modesFor(caps, target.codecs)
+  // The codecs the PC accepts that this phone can make.
+  const modes = modesFor(
+    caps,
+    target.codecs.filter((codec) => camera.codecs.includes(codec))
+  )
   const mode = pickMode(modes)
   if (mode === null)
     return yield* new CameraError({
