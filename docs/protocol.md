@@ -362,12 +362,31 @@ The frames never leave the PC. The agent hands the JPEG bytes unchanged to HTTP 
 control server (`127.0.0.1`, a random port written to `control.json`), the same server, token and `Host`
 check that `phoneset status` uses, so nothing is reachable from the network:
 
-| request                     | answer                                                                                                           |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `GET /video.mjpg?t=<token>` | `multipart/x-mixed-replace`: every frame as one `image/jpeg` part, newest first, for as long as the client reads |
-| `GET /video.jpg?t=<token>`  | the latest frame as one JPEG (404 until there is one)                                                            |
-| `GET /video?t=<token>`      | a page that shows the stream in a browser                                                                        |
-| `GET /video.h264?t=<token>` | for an `h264` camera: the raw Annex B stream, starting at a key frame (what `ffplay` and `ffmpeg` read as h264)  |
+| request                       | answer                                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `GET /video.mjpg?t=<token>`   | `multipart/x-mixed-replace`: every frame as one `image/jpeg` part, newest first, for as long as the client reads              |
+| `GET /video.jpg?t=<token>`    | the latest frame as one JPEG (404 until there is one)                                                                         |
+| `GET /video?t=<token>`        | a page that shows the stream in a browser                                                                                     |
+| `GET /video.h264?t=<token>`   | for an `h264` camera: the raw Annex B stream, starting at a key frame (what `ffplay` and `ffmpeg` read as h264)               |
+| `GET /video.frames?t=<token>` | records of any camera, each with its codec, size and orientation (below): what a program that decodes the camera itself reads |
+
+The raw streams cannot say how to turn the picture upright or when the mode changes; `/video.frames` can. It is a
+sequence of records, each an 18-byte header and then the payload (all numbers big endian):
+
+| field      | size | meaning                                                                                                          |
+| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------- |
+| `seq`      | u32  | the frame's `seq` as the phone sent it (8.3)                                                                     |
+| `captured` | u32  | the frame's `timestamp` (8.3)                                                                                    |
+| `codec`    | u8   | 1 `jpeg`, 2 `h264`                                                                                               |
+| `flags`    | u8   | as in 8.3: bit 0 key frame, bits 1 and 2 the quarter turns clockwise that make the picture upright, bit 3 mirror |
+| `width`    | u16  | pixels of the coded picture                                                                                      |
+| `height`   | u16  | pixels of the coded picture                                                                                      |
+| `length`   | u32  | bytes of the payload that follows                                                                                |
+
+The payload is the frame's: a JPEG, or one Annex B access unit with the SPS and PPS in front of a key frame. The codec,
+size and flags can change from one record to the next (the phone changed the mode); a reader decodes each record by
+its own header. An `h264` reader gets the same treatment as on `/video.h264`: it starts at a key frame, and one that
+missed a frame waits for the next key frame again (the PC asks a phone that can be asked for one).
 
 `phoneset video` prints the address, and `phoneset status` shows it while a phone is sending video. A
 reader that is slower than the phone gets the newest frame and misses the ones in between; it never

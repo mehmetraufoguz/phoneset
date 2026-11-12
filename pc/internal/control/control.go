@@ -89,6 +89,7 @@ func Serve(ctx context.Context, dir, mode string, args []string, h Handler, stop
 	// The camera of a phone (docs/protocol.md, section 9). Same listener, same token, same Host check.
 	mux.HandleFunc("GET /video.mjpg", s.guard(s.mjpeg))
 	mux.HandleFunc("GET /video.h264", s.guard(s.h264))
+	mux.HandleFunc("GET /video.frames", s.guard(s.frames))
 	mux.HandleFunc("GET /video.jpg", s.guard(s.snapshot))
 	mux.HandleFunc("GET /video", s.guard(s.videoPage))
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -252,8 +253,7 @@ func (a *api) h264(w http.ResponseWriter, r *http.Request) {
 	if rc.Flush() != nil {
 		return
 	}
-	var next uint32
-	synced := false
+	var gate keyGate
 	// A phone that supports it is asked for a key frame now, so that this reader does not wait for the next one.
 	a.h.Video().RequestKey()
 	for {
@@ -261,20 +261,9 @@ func (a *api) h264(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case f := <-sub.C:
-			if f.Codec != proto.CodecByteH264 {
+			if f.Codec != proto.CodecByteH264 || !gate.pass(f, a.h.Video().RequestKey) {
 				continue
 			}
-			if synced && f.Seq != next {
-				synced = false
-				a.h.Video().RequestKey()
-			}
-			if !synced {
-				if !f.Key {
-					continue
-				}
-				synced = true
-			}
-			next = f.Seq + 1
 			_ = rc.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			if _, err := w.Write(f.Data); err != nil {
 				return
@@ -375,6 +364,10 @@ func (c *Client) MJPEGURL() string { return c.url("/video.mjpg?t=" + c.Info.Toke
 
 // H264URL is the raw Annex B stream of an h264 camera, for ffplay, ffmpeg and the like.
 func (c *Client) H264URL() string { return c.url("/video.h264?t=" + c.Info.Token) }
+
+// FramesURL is the stream of records that carries each frame with its codec, size and orientation, for
+// programs that decode the camera themselves (docs/protocol.md, section 9).
+func (c *Client) FramesURL() string { return c.url("/video.frames?t=" + c.Info.Token) }
 
 // PairPageURL is the pairing page, with the token so a browser may open it.
 func (c *Client) PairPageURL() string { return c.url("/pair?t=" + c.Info.Token) }

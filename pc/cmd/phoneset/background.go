@@ -192,6 +192,7 @@ func cmdVideo(args []string) error {
 	open := fs.Bool("open", false, "")
 	raw := fs.Bool("mjpeg", false, "")
 	h264 := fs.Bool("h264", false, "")
+	frames := fs.Bool("frames", false, "")
 	_ = fs.Parse(args)
 
 	c, err := control.Connect(configDir(*dir))
@@ -204,6 +205,10 @@ func cmdVideo(args []string) error {
 	}
 	if *h264 {
 		fmt.Println(c.H264URL())
+		return nil
+	}
+	if *frames {
+		fmt.Println(c.FramesURL())
 		return nil
 	}
 	if *open {
