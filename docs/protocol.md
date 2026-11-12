@@ -362,13 +362,13 @@ The frames never leave the PC. The agent hands the JPEG bytes unchanged to HTTP 
 control server (`127.0.0.1`, a random port written to `control.json`), the same server, token and `Host`
 check that `phoneset status` uses, so nothing is reachable from the network:
 
-| request                       | answer                                                                                                                        |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `GET /video.mjpg?t=<token>`   | `multipart/x-mixed-replace`: every frame as one `image/jpeg` part, newest first, for as long as the client reads              |
-| `GET /video.jpg?t=<token>`    | the latest frame as one JPEG (404 until there is one)                                                                         |
-| `GET /video?t=<token>`        | a page that shows the stream in a browser                                                                                     |
-| `GET /video.h264?t=<token>`   | for an `h264` camera: the raw Annex B stream, starting at a key frame (what `ffplay` and `ffmpeg` read as h264)               |
-| `GET /video.frames?t=<token>` | records of any camera, each with its codec, size and orientation (below): what a program that decodes the camera itself reads |
+| request                       | answer                                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /video.mjpg?t=<token>`   | `multipart/x-mixed-replace`: every frame as one `image/jpeg` part, newest first, for as long as the client reads                   |
+| `GET /video.jpg?t=<token>`    | the latest frame as one JPEG (404 until there is one)                                                                              |
+| `GET /video?t=<token>`        | a page that shows the stream in a browser, upright: JPEG always, h264 where the browser has WebCodecs (Chrome, Edge, Safari 16.4+) |
+| `GET /video.h264?t=<token>`   | for an `h264` camera: the raw Annex B stream, starting at a key frame (what `ffplay` and `ffmpeg` read as h264)                    |
+| `GET /video.frames?t=<token>` | records of any camera, each with its codec, size and orientation (below): what a program that decodes the camera itself reads      |
 
 The raw streams cannot say how to turn the picture upright or when the mode changes; `/video.frames` can. It is a
 sequence of records, each an 18-byte header and then the payload (all numbers big endian):
