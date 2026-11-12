@@ -228,10 +228,13 @@ frames a second are just modes. After `authed` the phone starts the camera with
   "modes": [
     { "codec": "jpeg", "width": 640, "height": 480, "fps": 30 },
     { "codec": "jpeg", "width": 1280, "height": 720, "fps": 30 }
-  ]
+  ],
+  "features": ["keyreq"]
 }
 ```
 
+- `features` is optional: extras the phone supports. Today there is one, `keyreq` (8.3). A PC sends a message of a
+  kind the phone does not know only to a phone that listed it.
 - `mode` is what the phone is about to send. `modes` is everything the phone is willing to send with this
   camera, the list the PC (or later the user, or a link test, 8.8) can pick from. It is optional, and
   it says what the phone can capture and code, nothing about the link. `mode` must be one of `modes`
@@ -253,7 +256,7 @@ Type `0x04` carries one frame:
 | `seq`       | u32 BE                        | counts frames actually sent, from 0 for each start of the video stream                                                                                         |
 | `timestamp` | u32 BE                        | milliseconds on the phone's steady clock when the frame was captured; it wraps after 49.7 days, so only differences between frames of one stream mean anything |
 | `codec`     | u8                            | how `payload` is coded: 1 `jpeg`, 2 `h264`, 3 `hevc` (see 8.7)                                                                                                 |
-| `flags`     | u8                            | bit 0: the frame can be decoded on its own (a key frame). All other bits are 0                                                                                 |
+| `flags`     | u8                            | bit 0: the frame can be decoded on its own (a key frame); bits 1 and 2: the quarter turns clockwise the receiver applies to the decoded picture to make it upright; bit 3: mirror it horizontally after that. Bits 4 to 7 are 0 |
 | `width`     | u16 BE                        | pixels of the decoded picture                                                                                                                                  |
 | `height`    | u16 BE                        | pixels of the decoded picture                                                                                                                                  |
 | payload     | rest, at most `maxFrameBytes` | the coded picture                                                                                                                                              |
@@ -269,9 +272,10 @@ first frame of a stream is a key frame and one is made at least every 2 seconds.
 ones before it, so a sender never drops a frame after it was coded (it drops before coding, 8.4), and a
 receiver that missed one waits for the next key frame. This payload is defined for measuring (8.7); the PC
 passes it on unchanged and does not decode it.
-The picture is already upright: the phone rotates it, and `width` and `height` are the upright size. The
-front camera is not mirrored. (Exception for now: an Android phone's `h264` frames are in the camera's own
-orientation, not rotated, so a phone held across is upright; `width` and `height` are the coded size.) As a guide, a 1280 x 720 JPEG at quality 70 is about 50 to 120 KB. A frame
+`width` and `height` are the size of the coded picture. A phone that has rotated the picture itself sends
+rotation 0 (a JPEG always is upright, as is an iPhone's `h264`). An Android phone's `h264` frames are in the
+camera's own orientation and say in `flags` how far to turn them; a receiver that ignores the bits shows them
+sideways when the phone is held upright. The front camera is not mirrored unless bit 3 says so. As a guide, a 1280 x 720 JPEG at quality 70 is about 50 to 120 KB. A frame
 that is not what it says it is is dropped (and acknowledged, 8.4) and the connection stays. A sender must
 not send more than `maxFrameBytes`: the PC reads messages only slightly larger than that, and ends the
 connection on a bigger one. Until `authed` a message may be at most 64 KiB, as everywhere.
@@ -292,6 +296,12 @@ everything else. Two rules:
   left a frame over 128 KB alone in flight and halved the frame rate at 1080p, see
   `docs/webcam-measurements.md`). A slow link therefore lowers the frame rate, and a fast one does not need
   a different rule.
+
+Flags and the request for a key frame (`keyreq`): a reader that has just joined, or has lost its place, needs a
+key frame, and waiting for the next one can take 2 s. A phone that supports the request lists
+`"features":["keyreq"]` in its `video` message (section 8.2); the PC may then send it `{"t":"vkey"}` on the video
+connection, and the phone makes the next frame a key frame as soon as it can. A PC sends `vkey` only to a phone
+that listed the feature (section 8.6). A phone that does not list it keeps the old behaviour.
 
 ### 8.5 Statistics
 

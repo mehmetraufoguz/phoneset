@@ -254,6 +254,8 @@ func (a *api) h264(w http.ResponseWriter, r *http.Request) {
 	}
 	var next uint32
 	synced := false
+	// A phone that supports it is asked for a key frame now, so that this reader does not wait for the next one.
+	a.h.Video().RequestKey()
 	for {
 		select {
 		case <-r.Context().Done():
@@ -264,6 +266,7 @@ func (a *api) h264(w http.ResponseWriter, r *http.Request) {
 			}
 			if synced && f.Seq != next {
 				synced = false
+				a.h.Video().RequestKey()
 			}
 			if !synced {
 				if !f.Key {

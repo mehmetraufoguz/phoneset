@@ -15,6 +15,8 @@ type Frame struct {
 	Height     int
 	Codec      byte   // proto.CodecByteJPEG or proto.CodecByteH264
 	Key        bool   // can be decoded on its own
+	Rotation   int    // quarter turns clockwise that make the decoded picture upright (0 to 3)
+	Mirror     bool   // mirror it horizontally after that
 	Data       []byte // a JPEG, or one Annex B access unit for h264
 	Received   time.Time
 }
@@ -49,6 +51,10 @@ type Hub struct {
 	subs   map[*Sub]struct{}
 	frames uint64
 	bytes  uint64
+
+	// asks the phone for a key frame, set while a phone that supports it is sending (see RequestKey)
+	keyReq     func()
+	lastKeyReq time.Time
 
 	// arrival times and sizes of the last rateWindow frames, for the rates
 	ring  [rateWindow]arrival
@@ -113,6 +119,31 @@ func (h *Hub) End(gen uint64) {
 		return
 	}
 	h.on, h.camera, h.codec, h.asked, h.latest = false, "", "", 0, nil
+	h.keyReq = nil
+}
+
+// SetKeyRequester registers how to ask the phone of the stream that Begin numbered gen for a key frame. A newer
+// stream that has begun since replaces it (and ignores a late call for an older one).
+func (h *Hub) SetKeyRequester(gen uint64, f func()) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if gen == h.gen {
+		h.keyReq = f
+	}
+}
+
+// RequestKey asks the phone for a key frame, if it can be asked (it listed the feature) and no request was
+// made in the last 300 ms. A reader calls it when it joins and when it has lost its place.
+func (h *Hub) RequestKey() {
+	h.mu.Lock()
+	f := h.keyReq
+	if f == nil || time.Since(h.lastKeyReq) < 300*time.Millisecond {
+		h.mu.Unlock()
+		return
+	}
+	h.lastKeyReq = time.Now()
+	h.mu.Unlock()
+	f()
 }
 
 // Publish hands a frame to every reader without ever blocking.

@@ -43,6 +43,7 @@ const (
 	TVideo  = "video"
 	TVAck   = "vack"
 	TVStats = "vstats"
+	TVKey   = "vkey"
 	TError  = "error"
 	TBye    = "bye"
 )
@@ -166,6 +167,18 @@ type VideoState struct {
 	Mode   *VideoMode  `json:"mode,omitempty"`  // what the phone sends, or what is in effect
 	Modes  []VideoMode `json:"modes,omitempty"` // everything the phone is willing to send (a request only)
 	Error  string      `json:"error,omitempty"`
+	// Features lists optional things the phone supports (a request only). A PC sends a message of a kind the
+	// phone does not know only to a phone that listed it here (docs/protocol.md, section 8.6).
+	Features []string `json:"features,omitempty"`
+}
+
+// FeatureKeyRequest is the video feature "keyreq": the phone answers a VideoKeyRequest with a key frame.
+const FeatureKeyRequest = "keyreq"
+
+// VideoKeyRequest asks the phone for a key frame as soon as it can (section 8.3), for a reader that has just
+// joined or has lost its place. Sent only to a phone that listed FeatureKeyRequest.
+type VideoKeyRequest struct {
+	T string `json:"t"`
 }
 
 // VideoAck confirms that the PC has read a video frame (section 8.3).
@@ -238,8 +251,15 @@ const (
 	CodecByteHEVC byte = 3
 )
 
-// VideoFlagKey marks a frame that can be decoded on its own.
-const VideoFlagKey byte = 1
+// The flags byte of a video frame (section 8.3): bit 0 marks a frame that can be decoded on its own, bits 1 and 2
+// are the quarter turns clockwise the receiver applies to the decoded picture to make it upright, and bit 3 asks it
+// to mirror the picture horizontally after that. The other bits are 0.
+const (
+	VideoFlagKey           byte = 1
+	VideoFlagRotationShift      = 1
+	VideoFlagRotationMask  byte = 3 << VideoFlagRotationShift
+	VideoFlagMirror        byte = 8
+)
 
 // Camera facings in Stream.Camera.
 const (

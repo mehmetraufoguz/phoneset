@@ -43,6 +43,10 @@ type videoConn struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 
+	ctx context.Context // the connection's, set when it starts to run
+	// whether the phone listed proto.FeatureKeyRequest in its last request
+	keyReq bool
+
 	// used by the goroutine that reads the connection only
 	on     bool
 	camera string
@@ -169,6 +173,7 @@ func (s *Server) stopVideo(vc *videoConn) {
 
 // runVideo serves one video connection until it ends, returning a short reason for the log.
 func (s *Server) runVideo(ctx context.Context, vc *videoConn) string {
+	vc.ctx = ctx
 	go s.sendVideoStats(ctx, vc)
 	for {
 		typ, body, err := vc.ch.Recv(ctx)
@@ -240,9 +245,13 @@ func (s *Server) applyVideo(vc *videoConn, req proto.VideoState) proto.VideoStat
 			return proto.VideoState{T: proto.TVideo, On: false, Error: why}
 		}
 		mode := *req.Mode
+		vc.keyReq = slices.Contains(req.Features, proto.FeatureKeyRequest)
 		if !vc.on || vc.camera != camera || vc.mode != mode {
-			s.log.Debug("video modes offered", "count", len(req.Modes))
+			s.log.Debug("video modes offered", "count", len(req.Modes), "keyReq", vc.keyReq)
 			vc.gen = s.video.Begin(camera, mode.Codec, mode.FPS)
+			if vc.keyReq {
+				s.video.SetKeyRequester(vc.gen, func() { s.askForKeyFrame(vc) })
+			}
 			if !vc.on {
 				s.log.Info("camera on", "facing", camera, "codec", mode.Codec, "size", fmt.Sprintf("%dx%d", mode.Width, mode.Height), "fps", mode.FPS)
 			}
@@ -270,7 +279,8 @@ func (s *Server) onVideo(ctx context.Context, vc *videoConn, body []byte) {
 	codec := body[8]
 	w, h := int(binary.BigEndian.Uint16(body[10:12])), int(binary.BigEndian.Uint16(body[12:14]))
 	payload := body[proto.VideoHeaderLen:]
-	key := body[9]&1 == 1
+	flags := body[9]
+	key := flags&proto.VideoFlagKey != 0
 	good := w > 0 && h > 0 &&
 		(vc.mode.Codec == proto.CodecJPEG && codec == proto.CodecByteJPEG && isJPEG(payload) ||
 			vc.mode.Codec == proto.CodecH264 && codec == proto.CodecByteH264 && isAnnexB(payload))
@@ -278,12 +288,22 @@ func (s *Server) onVideo(ctx context.Context, vc *videoConn, body []byte) {
 		s.video.Publish(&video.Frame{
 			Seq: seq, CapturedMs: binary.BigEndian.Uint32(body[4:8]), Width: w, Height: h,
 			Codec: codec, Key: key, Data: payload,
+			Rotation: int(flags&proto.VideoFlagRotationMask) >> proto.VideoFlagRotationShift,
+			Mirror:   flags&proto.VideoFlagMirror != 0,
 		})
 	} else if vc.bad++; vc.bad == 1 {
 		s.log.Warn("ignored a camera frame that is not what the mode says", "codec", codec, "bytes", len(payload))
 	}
 	// Acknowledged either way, so the phone's window never stalls on a bad frame.
 	_ = sendJSON(ctx, vc.ch, proto.VideoAck{T: proto.TVAck, Seq: seq})
+}
+
+// askForKeyFrame sends the phone a request for a key frame (only called for a phone that listed the feature).
+func (s *Server) askForKeyFrame(vc *videoConn) {
+	if vc.ctx == nil {
+		return
+	}
+	_ = sendJSON(vc.ctx, vc.ch, proto.VideoKeyRequest{T: proto.TVKey})
 }
 
 func isJPEG(b []byte) bool {
