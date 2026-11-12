@@ -48,11 +48,13 @@ type videoConn struct {
 	keyReq bool
 
 	// used by the goroutine that reads the connection only
-	on     bool
-	camera string
-	mode   proto.VideoMode // the mode in effect, while on
-	gen    uint64          // the Hub's number for this stream
-	bad    uint64
+	on      bool
+	camera  string
+	mode    proto.VideoMode // the mode in effect, while on
+	gen     uint64          // the Hub's number for this stream
+	bad     uint64
+	turn    byte // the orientation bits of the last frame (rotation and mirror), once turnSet
+	turnSet bool
 }
 
 func (s *Server) handleVideoWS(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +257,7 @@ func (s *Server) applyVideo(vc *videoConn, req proto.VideoState) proto.VideoStat
 			if !vc.on {
 				s.log.Info("camera on", "facing", camera, "codec", mode.Codec, "size", fmt.Sprintf("%dx%d", mode.Width, mode.Height), "fps", mode.FPS)
 			}
-			vc.on, vc.camera, vc.mode = true, camera, mode
+			vc.on, vc.camera, vc.mode, vc.turnSet = true, camera, mode, false
 			s.changed()
 		}
 	} else {
@@ -285,6 +287,11 @@ func (s *Server) onVideo(ctx context.Context, vc *videoConn, body []byte) {
 		(vc.mode.Codec == proto.CodecJPEG && codec == proto.CodecByteJPEG && isJPEG(payload) ||
 			vc.mode.Codec == proto.CodecH264 && codec == proto.CodecByteH264 && isAnnexB(payload))
 	if good {
+		if turn := flags & (proto.VideoFlagRotationMask | proto.VideoFlagMirror); !vc.turnSet || turn != vc.turn {
+			vc.turn, vc.turnSet = turn, true
+			s.log.Debug("picture orientation", "rotation", int(turn&proto.VideoFlagRotationMask)>>proto.VideoFlagRotationShift,
+				"mirror", turn&proto.VideoFlagMirror != 0)
+		}
 		s.video.Publish(&video.Frame{
 			Seq: seq, CapturedMs: binary.BigEndian.Uint32(body[4:8]), Width: w, Height: h,
 			Codec: codec, Key: key, Data: payload,
