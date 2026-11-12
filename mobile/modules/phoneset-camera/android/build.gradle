@@ -26,4 +26,7 @@ dependencies {
   implementation "androidx.camera:camera-core:${camerax_version}"
   implementation "androidx.camera:camera-camera2:${camerax_version}"
   implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+  // The WebSocket of the native video connection; the app already carries OkHttp (React Native uses it), this is
+  // the version it resolves to.
+  implementation "com.squareup.okhttp3:okhttp:4.9.2"
 }

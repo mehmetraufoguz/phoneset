@@ -31,6 +31,8 @@ interface FrameProvider {
   fun stop()
   /** What the camera side has done since it started, for measuring. */
   fun stats(): Map<String, Any>
+  /** The PC asked for a picture that can be decoded on its own. A JPEG always is one, so only H.264 acts on this. */
+  fun requestKeyFrame() {}
 }
 
 /**

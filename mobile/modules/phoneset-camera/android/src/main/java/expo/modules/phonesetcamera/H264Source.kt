@@ -29,8 +29,9 @@ import java.util.concurrent.Executors
  * CameraX's Preview use case draws the camera's pictures straight onto the encoder's input surface, so no
  * picture is copied or converted by the CPU. The encoder hands back one Annex B access unit per picture
  * (docs/protocol.md, section 8.3): the SPS and the PPS in front of every key frame, no B-frames, a key
- * frame every 2 seconds. The picture is not rotated: it is the camera's own orientation (a phone held
- * across, as a webcam usually is, is upright), and `width` and `height` in the frame are the coded size.
+ * frame every 2 seconds. The picture is not rotated here: it is in the camera's own orientation, `width` and
+ * `height` in the frame are the coded size, and bits 1 and 2 of `flags` say how many quarter turns clockwise
+ * the receiver applies to make it upright (CameraX's transformation info for the way the phone is held).
  *
  * A coded frame depends on those before it, so it is never dropped alone: frames wait for a request in a short
  * queue, and when it overflows everything in it is dropped, the encoder is asked for a key frame and nothing
@@ -50,6 +51,7 @@ class H264Source(private val context: Context) : FrameProvider {
   private var config: ByteArray? = null // SPS and PPS, Annex B
   private var seq = 0
   private var needKey = true
+  @Volatile private var turns = 0 // quarter turns clockwise to make the picture upright
   private var width = 0
   private var height = 0
   private var startedMs = 0L
@@ -64,7 +66,7 @@ class H264Source(private val context: Context) : FrameProvider {
       try {
         stopOnMain()
         synchronized(lock) {
-          ready.clear(); config = null; seq = 0; needKey = true
+          ready.clear(); config = null; seq = 0; needKey = true; turns = 0
           frames = 0; bytes = 0; dropped = 0; startedMs = SystemClock.elapsedRealtime()
         }
       } catch (e: Throwable) {
@@ -146,6 +148,11 @@ class H264Source(private val context: Context) : FrameProvider {
     val input = surface ?: throw CameraFailure("The H.264 coder gave no input surface.")
     synchronized(lock) { width = size.width; height = size.height }
     codec = encoder
+    // How far the picture has to be turned to be upright for the way the phone is held; CameraX tells us, and
+    // tells again when the phone is turned. The front camera is not mirrored, so bit 3 stays 0.
+    request.setTransformationInfoListener(surfaceExecutor) { info ->
+      turns = ((info.rotationDegrees / 90) % 4 + 4) % 4
+    }
     request.provideSurface(input, surfaceExecutor) { input.release() }
     running = true
     drain = Thread({ drainLoop(encoder) }, "phoneset-h264-drain").also { it.start() }
@@ -204,7 +211,8 @@ class H264Source(private val context: Context) : FrameProvider {
       putInt(out, 0, seq++)
       putInt(out, 4, (presentationUs / 1000).toInt())
       out[8] = CODEC_H264
-      out[9] = if (key) FLAG_KEY else 0
+      // Bit 0: key frame. Bits 1 and 2: the quarter turns clockwise that make the picture upright (section 8.3).
+      out[9] = ((if (key) FLAG_KEY.toInt() else 0) or (turns shl 1)).toByte()
       out[10] = (width shr 8).toByte(); out[11] = width.toByte()
       out[12] = (height shr 8).toByte(); out[13] = height.toByte()
       if (prepend) {
@@ -245,7 +253,8 @@ class H264Source(private val context: Context) : FrameProvider {
     return false
   }
 
-  private fun requestKeyFrame() {
+  /** Asks the encoder for a key frame now (the PC's reader joined, or lost a frame); it comes with the next picture. */
+  override fun requestKeyFrame() {
     try {
       codec?.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) })
     } catch (_: Throwable) {
