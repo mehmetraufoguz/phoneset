@@ -26,25 +26,25 @@ a second?
 
 ## 2. What the app does now (state of `main`)
 
-| Area | State |
-| --- | --- |
-| Default mode | JPEG 720p30, on both platforms (the gate `CODEC_TRIED` in `mobile/src/core/videoModes.ts` offers JPEG up to 720p30) |
-| H.264 | iOS and Android code it in hardware and offer it in `modes` up to 4K at 60; it is picked only by a test build (a temporary "Next mode" button that is not in `main`) |
-| PC side | accepts `jpeg` and `h264`, shows JPEG as MJPEG at `/video.mjpg` and `/video`, passes H.264 on as a raw Annex B stream at `/video.h264`; it does not decode H.264 |
-| Window | 3 frames and 2 MB in flight (it was 2 frames and 256 KB) |
-| Coder pipeline | 2 pictures asked for ahead, for H.264 only |
-| Not built | a decoder on the PC, a virtual camera, the link test of protocol 8.8, the subscription, a mode picker, thermal-aware mode changes |
+| Area           | State                                                                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default mode   | JPEG 720p30, on both platforms (the gate `CODEC_TRIED` in `mobile/src/core/videoModes.ts` offers JPEG up to 720p30)                                                  |
+| H.264          | iOS and Android code it in hardware and offer it in `modes` up to 4K at 60; it is picked only by a test build (a temporary "Next mode" button that is not in `main`) |
+| PC side        | accepts `jpeg` and `h264`, shows JPEG as MJPEG at `/video.mjpg` and `/video`, passes H.264 on as a raw Annex B stream at `/video.h264`; it does not decode H.264     |
+| Window         | 3 frames and 2 MB in flight (it was 2 frames and 256 KB)                                                                                                             |
+| Coder pipeline | 2 pictures asked for ahead, for H.264 only                                                                                                                           |
+| Not built      | a decoder on the PC, a virtual camera, the link test of protocol 8.8, the subscription, a mode picker, thermal-aware mode changes                                    |
 
 Changes made because of the measurements, in order:
 
-| Commit | What | Measured effect |
-| --- | --- | --- |
-| `442531f` | the iOS camera module takes the exact size and rate asked for (it used to pick the 720p or 480p preset from the width alone, so nothing above 720p had ever been captured) | frames arrive at 1080p, 1440p and 2160p |
-| `145090b` | video window 3 frames, 2 MB | iPhone JPEG 1080p30 16.8 to 30.1 fps, 1080p60 20.2 to 38.7 |
-| `4f1e5a4`, `aed3b71`, `6cfd725` | the PC accepts h264 and relays it; protocol section 8.3 defines the payload; the iOS VideoToolbox coder | section 5 |
-| `71fc0c3` | two pictures in the coder at a time (h264) | iPhone 4K30 15.0 to 25.4 fps, 1080p60 53.9 to 59.5 |
-| `6caf56f` | the PC advertises only reachable interfaces over mDNS | Android pairing by the discovered PC works (section 7) |
-| `d43e036`, `48a7379` | a phone offers only the codecs its camera module can make; the Android MediaCodec coder | OPPO 480p only (JPEG) to 30 fps up to 2688 x 1512 |
+| Commit                          | What                                                                                                                                                                       | Measured effect                                            |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `442531f`                       | the iOS camera module takes the exact size and rate asked for (it used to pick the 720p or 480p preset from the width alone, so nothing above 720p had ever been captured) | frames arrive at 1080p, 1440p and 2160p                    |
+| `145090b`                       | video window 3 frames, 2 MB                                                                                                                                                | iPhone JPEG 1080p30 16.8 to 30.1 fps, 1080p60 20.2 to 38.7 |
+| `4f1e5a4`, `aed3b71`, `6cfd725` | the PC accepts h264 and relays it; protocol section 8.3 defines the payload; the iOS VideoToolbox coder                                                                    | section 5                                                  |
+| `71fc0c3`                       | two pictures in the coder at a time (h264)                                                                                                                                 | iPhone 4K30 15.0 to 25.4 fps, 1080p60 53.9 to 59.5         |
+| `6caf56f`                       | the PC advertises only reachable interfaces over mDNS                                                                                                                      | Android pairing by the discovered PC works (section 7)     |
+| `d43e036`, `48a7379`            | a phone offers only the codecs its camera module can make; the Android MediaCodec coder                                                                                    | OPPO 480p only (JPEG) to 30 fps up to 2688 x 1512          |
 
 ## 3. Best result per mode
 
@@ -53,28 +53,28 @@ are listed by the size the coder was actually given, because CameraX chooses it 
 
 **iPhone 13 Pro**
 
-| Mode | JPEG | H.264 |
-| --- | --- | --- |
-| 480p30 | 30.1 fps, 7.4 Mbit/s | 30.0 fps, 0.5 Mbit/s |
-| 480p60 | 60.0 fps, 14.3 Mbit/s | 59.0 fps, 1.6 Mbit/s |
-| 720p30 | 30.1 fps, 16.6 Mbit/s | 29.8 fps, 2.6 Mbit/s |
-| 720p60 | 59.9 fps, 32.7 Mbit/s | 56.4 fps, 5.3 Mbit/s |
-| 1080p30 | 30.1 fps, 46.9 Mbit/s | 30.0 fps, 6.2 Mbit/s |
-| 1080p60 | 38.7 fps, 54.6 Mbit/s | 59.5 fps, 10.8 Mbit/s |
-| 2K30 (1920 x 1440) | 19.9 fps, 38.4 Mbit/s | 30.0 fps, 2.4 Mbit/s |
-| 2K60 | 19.5 fps, 37.7 Mbit/s | 60.0 fps, 14.4 Mbit/s |
-| 4K30 | 4.4 fps, 34.0 Mbit/s | 25.4 fps, 24.9 Mbit/s |
-| 4K60 | 4.7 fps, 28.7 Mbit/s | 25.6 fps, 34.5 Mbit/s |
+| Mode               | JPEG                  | H.264                 |
+| ------------------ | --------------------- | --------------------- |
+| 480p30             | 30.1 fps, 7.4 Mbit/s  | 30.0 fps, 0.5 Mbit/s  |
+| 480p60             | 60.0 fps, 14.3 Mbit/s | 59.0 fps, 1.6 Mbit/s  |
+| 720p30             | 30.1 fps, 16.6 Mbit/s | 29.8 fps, 2.6 Mbit/s  |
+| 720p60             | 59.9 fps, 32.7 Mbit/s | 56.4 fps, 5.3 Mbit/s  |
+| 1080p30            | 30.1 fps, 46.9 Mbit/s | 30.0 fps, 6.2 Mbit/s  |
+| 1080p60            | 38.7 fps, 54.6 Mbit/s | 59.5 fps, 10.8 Mbit/s |
+| 2K30 (1920 x 1440) | 19.9 fps, 38.4 Mbit/s | 30.0 fps, 2.4 Mbit/s  |
+| 2K60               | 19.5 fps, 37.7 Mbit/s | 60.0 fps, 14.4 Mbit/s |
+| 4K30               | 4.4 fps, 34.0 Mbit/s  | 25.4 fps, 24.9 Mbit/s |
+| 4K60               | 4.7 fps, 28.7 Mbit/s  | 25.6 fps, 34.5 Mbit/s |
 
 **OPPO A9 2020** (Snapdragon 665, Android 11), mode asked and size coded:
 
-| Mode asked / coded | JPEG | H.264 |
-| --- | --- | --- |
-| 864 x 480 / 864 x 480 | 24.2 fps, 2.8 Mbit/s | 30.0 fps, 1.5 Mbit/s |
-| 1600 x 720 / 1920 x 1080 | 5.4 fps, 4.4 Mbit/s | 30.0 fps, 6.2 Mbit/s |
-| 2400 x 1080 / 2688 x 1512 | 1.3 fps, 2.5 Mbit/s | 30.1 fps, 12.2 Mbit/s |
-| 1920 x 1440 / 2688 x 1512 | 1.6 fps, 3.0 Mbit/s | 30.1 fps, 12.2 Mbit/s |
-| 3840 x 2160 / 3840 x 2160 | 0.4 fps, 2.0 Mbit/s | 25.4 fps, 21.1 Mbit/s |
+| Mode asked / coded        | JPEG                 | H.264                 |
+| ------------------------- | -------------------- | --------------------- |
+| 864 x 480 / 864 x 480     | 24.2 fps, 2.8 Mbit/s | 30.0 fps, 1.5 Mbit/s  |
+| 1600 x 720 / 1920 x 1080  | 5.4 fps, 4.4 Mbit/s  | 30.0 fps, 6.2 Mbit/s  |
+| 2400 x 1080 / 2688 x 1512 | 1.3 fps, 2.5 Mbit/s  | 30.1 fps, 12.2 Mbit/s |
+| 1920 x 1440 / 2688 x 1512 | 1.6 fps, 3.0 Mbit/s  | 30.1 fps, 12.2 Mbit/s |
+| 3840 x 2160 / 3840 x 2160 | 0.4 fps, 2.0 Mbit/s  | 25.4 fps, 21.1 Mbit/s |
 
 The iPhone JPEG numbers are from the runs described in section 4 (the 3-frame window from 1080p up, a cool phone
 below it, 4K60 from the older window); the iPhone H.264 numbers from 480p30 to 720p30 are from the run with one picture
@@ -221,76 +221,76 @@ numbers.
 
 ### A.1 iPhone, JPEG, first pass (2-frame window, one run per mode)
 
-| Mode | fps (worst second) | Mbit/s | KB per frame | Notes |
-| --- | --- | --- | --- | --- |
-| 480p30 | 30.1 (30) | 8.5 | 34 | |
-| 480p60 | 55.7 (22) | 14.1 | 31 | 2 gaps over 100 ms |
-| 720p30 | 30.0 (29) | 18.1 | 74 | |
-| 720p60 | 59.4 (45) | 35.3 | 73 | one gap of 259 ms |
-| 1080p30 | 28.8 (23) | 37.6 | 159 | |
-| 1080p60 | 20.7 (20) | 27.4 | 161 | |
-| 2K30 | 15.1 (14) | 28.1 | 228 | |
-| 2K60 | 20.0 (19) | 38.6 | 235 | |
-| 4K30 | 7.7 (6) | 39.3 | 626 | 188 gaps over 100 ms |
-| 4K60 | 4.7 (4) | 30.6 | 788 | 118 gaps over 100 ms |
+| Mode    | fps (worst second) | Mbit/s | KB per frame | Notes                |
+| ------- | ------------------ | ------ | ------------ | -------------------- |
+| 480p30  | 30.1 (30)          | 8.5    | 34           |                      |
+| 480p60  | 55.7 (22)          | 14.1   | 31           | 2 gaps over 100 ms   |
+| 720p30  | 30.0 (29)          | 18.1   | 74           |                      |
+| 720p60  | 59.4 (45)          | 35.3   | 73           | one gap of 259 ms    |
+| 1080p30 | 28.8 (23)          | 37.6   | 159          |                      |
+| 1080p60 | 20.7 (20)          | 27.4   | 161          |                      |
+| 2K30    | 15.1 (14)          | 28.1   | 228          |                      |
+| 2K60    | 20.0 (19)          | 38.6   | 235          |                      |
+| 4K30    | 7.7 (6)            | 39.3   | 626          | 188 gaps over 100 ms |
+| 4K60    | 4.7 (4)            | 30.6   | 788          | 118 gaps over 100 ms |
 
 A longer run at 720p30 (120 s) held 30.0 fps and 16.8 Mbit/s with a longest gap of 70 ms. A first 1080p60 run was
 spoiled by the app switching mode and was discarded.
 
 ### A.2 iPhone, JPEG, second pass with the phone's counters
 
-| Mode | fps | Camera fps / JPEGs per s | Same mode, first pass |
-| --- | --- | --- | --- |
-| 480p30 | 30.1 | 29.9 / 29.8 | 30.1 |
-| 480p60 | 60.0 | 59.8 / 59.7 | 55.7 |
-| 720p30 | 30.1 | 29.9 / 29.9 | 30.0 |
-| 720p60 | 59.9 | 59.9 / 59.7 | 59.4 |
-| 1080p30 | 29.7 | 29.9 / 29.2 | 28.8 |
-| 1080p60 | 29.9 | 59.9 / 29.7 | 20.7 |
-| 2K30 | 16.0 | 30.0 / 15.9 | 15.1 |
-| 2K60 | 20.3 | 59.8 / 19.9 | 20.0 |
-| 4K30 | 6.5 | 29.9 / 6.3 | 7.7 |
-| 4K60 | 4.5 | 59.9 / 4.5 | 4.7 |
+| Mode    | fps  | Camera fps / JPEGs per s | Same mode, first pass |
+| ------- | ---- | ------------------------ | --------------------- |
+| 480p30  | 30.1 | 29.9 / 29.8              | 30.1                  |
+| 480p60  | 60.0 | 59.8 / 59.7              | 55.7                  |
+| 720p30  | 30.1 | 29.9 / 29.9              | 30.0                  |
+| 720p60  | 59.9 | 59.9 / 59.7              | 59.4                  |
+| 1080p30 | 29.7 | 29.9 / 29.2              | 28.8                  |
+| 1080p60 | 29.9 | 59.9 / 29.7              | 20.7                  |
+| 2K30    | 16.0 | 30.0 / 15.9              | 15.1                  |
+| 2K60    | 20.3 | 59.8 / 19.9              | 20.0                  |
+| 4K30    | 6.5  | 29.9 / 6.3               | 7.7                   |
+| 4K60    | 4.5  | 59.9 / 4.5               | 4.7                   |
 
 ### A.3 iPhone, JPEG, where the time of one frame goes (per frame; cool phone)
 
-| Mode | KB per frame | Making the JPEG | Hand-over to the socket | Send to acknowledgement | fps |
-| --- | --- | --- | --- | --- | --- |
-| 720p60 | 66 | 2.6 ms | 5.7 ms | 15 ms | 59.9 |
-| 1080p30 | 149 | 4.4 ms | 13.8 ms | 25 ms | 29.7 |
-| 1080p60 | 144 | 4.4 ms | 12.8 ms | 24 ms | 29.9 |
-| 2K30 | 185 | 5.7 ms | 19.9 ms | 33 ms | 16.0 |
-| 2K60 | 204 | 6.0 ms | 27.5 ms (45 ms later) | 41 ms | 20.3 |
-| 4K30 | 634 | 16.0 ms | 93 to 116 ms | 121 to 167 ms | 6.5 |
-| 4K60 | 749 | 17.5 ms | 156 to 159 ms | 187 to 192 ms | 4.5 |
+| Mode    | KB per frame | Making the JPEG | Hand-over to the socket | Send to acknowledgement | fps  |
+| ------- | ------------ | --------------- | ----------------------- | ----------------------- | ---- |
+| 720p60  | 66           | 2.6 ms          | 5.7 ms                  | 15 ms                   | 59.9 |
+| 1080p30 | 149          | 4.4 ms          | 13.8 ms                 | 25 ms                   | 29.7 |
+| 1080p60 | 144          | 4.4 ms          | 12.8 ms                 | 24 ms                   | 29.9 |
+| 2K30    | 185          | 5.7 ms          | 19.9 ms                 | 33 ms                   | 16.0 |
+| 2K60    | 204          | 6.0 ms          | 27.5 ms (45 ms later)   | 41 ms                   | 20.3 |
+| 4K30    | 634          | 16.0 ms         | 93 to 116 ms            | 121 to 167 ms           | 6.5  |
+| 4K60    | 749          | 17.5 ms         | 156 to 159 ms           | 187 to 192 ms           | 4.5  |
 
 ### A.4 iPhone, JPEG, the window: old (2 frames, 256 KB) and new (3 frames, 2 MB) back to back
 
 A control run at 720p60 with the old window gave 60.0 fps first, so the phone was not slowed down. The window was
 switched by a temporary button.
 
-| Mode | KB per frame | Old window fps | New window fps | Old Mbit/s | New Mbit/s | Worst gap, new |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1080p30 | 190 | 16.8 | **30.1** | 26.4 | 46.9 | 40 ms |
-| 1080p60 | 172 | 20.2 | **38.7** | 28.3 | 54.6 | 345 ms |
-| 2K30 | 235 | 12.9 | **19.9** | 25.0 | 38.4 | 69 ms |
-| 2K60 | 236 | 10.9 | **19.5** | 21.1 | 37.7 | 122 ms |
-| 4K30 | 942 | 3.0 | **4.4** | 22.9 | 34.0 | 348 ms |
+| Mode    | KB per frame | Old window fps | New window fps | Old Mbit/s | New Mbit/s | Worst gap, new |
+| ------- | ------------ | -------------- | -------------- | ---------- | ---------- | -------------- |
+| 1080p30 | 190          | 16.8           | **30.1**       | 26.4       | 46.9       | 40 ms          |
+| 1080p60 | 172          | 20.2           | **38.7**       | 28.3       | 54.6       | 345 ms         |
+| 2K30    | 235          | 12.9           | **19.9**       | 25.0       | 38.4       | 69 ms          |
+| 2K60    | 236          | 10.9           | **19.5**       | 21.1       | 37.7       | 122 ms         |
+| 4K30    | 942          | 3.0            | **4.4**        | 22.9       | 34.0       | 348 ms         |
 
 ### A.5 iPhone, H.264: one picture in the coder, and two
 
-| Mode | One picture: fps | Mbit/s | KB/frame | Two pictures: fps | Mbit/s | KB/frame |
-| --- | --- | --- | --- | --- | --- | --- |
-| 480p30 | 30.0 | 0.5 | 2 | | | |
-| 480p60 | 59.0 | 1.6 | 3 | | | |
-| 720p30 | 29.8 | 2.6 | 11 | | | |
-| 720p60 | 56.5 | 5.0 | 11 | 56.4 | 5.3 | 11 |
-| 1080p30 | 30.0 | 6.2 | 25 | 30.0 | 6.2 | 25 |
-| 1080p60 | 53.9 (one 1.9 s freeze) | 9.5 | 21 | **59.5** | 10.8 | 22 |
-| 2K30 | 30.0 | 2.7 | 11 | 30.0 | 2.4 | 10 |
-| 2K60 | 59.0 | 13.8 | 29 | **60.0** | 14.4 | 29 |
-| 4K30 | 15.0 | 24.9 | 202 | **25.4** | 24.9 | 120 |
-| 4K60 | 20.0 | 27.9 | 170 | **25.6** | 34.5 | 164 |
+| Mode    | One picture: fps        | Mbit/s | KB/frame | Two pictures: fps | Mbit/s | KB/frame |
+| ------- | ----------------------- | ------ | -------- | ----------------- | ------ | -------- |
+| 480p30  | 30.0                    | 0.5    | 2        |                   |        |          |
+| 480p60  | 59.0                    | 1.6    | 3        |                   |        |          |
+| 720p30  | 29.8                    | 2.6    | 11       |                   |        |          |
+| 720p60  | 56.5                    | 5.0    | 11       | 56.4              | 5.3    | 11       |
+| 1080p30 | 30.0                    | 6.2    | 25       | 30.0              | 6.2    | 25       |
+| 1080p60 | 53.9 (one 1.9 s freeze) | 9.5    | 21       | **59.5**          | 10.8   | 22       |
+| 2K30    | 30.0                    | 2.7    | 11       | 30.0              | 2.4    | 10       |
+| 2K60    | 59.0                    | 13.8   | 29       | **60.0**          | 14.4   | 29       |
+| 4K30    | 15.0                    | 24.9   | 202      | **25.4**          | 24.9   | 120      |
+| 4K60    | 20.0                    | 27.9   | 170      | **25.6**          | 34.5   | 164      |
 
 Coder delay (hand-over to coded frame) with one picture: 7.1 ms at 720p60, 11.5 ms at 1080p60, 37.5 ms at 4K30; with
 two pictures 57 ms at 4K30 and 59.5 ms at 4K60.
@@ -298,21 +298,21 @@ two pictures 57 ms at 4K30 and 59.5 ms at 4K60.
 ### A.6 OPPO A9 2020, JPEG
 
 | Mode offered | Frame received | fps (worst second) | Mbit/s | KB per frame | Making the JPEG |
-| --- | --- | --- | --- | --- | --- |
-| 864x480@30 | 480x864 | 24.2 (19) | 2.8 | 14 | 28.5 ms |
-| 1600x720@30 | 1080x1920 | 5.4 (1) | 4.4 | 99 | 179 ms |
-| 2400x1080@30 | 1512x2688 | 1.3 (1) | 2.5 | 235 | 644 ms |
-| 1920x1440@30 | 1512x2688 | 1.6 (1) | 3.0 | 235 | not read |
-| 3840x2160@30 | 2160x3840 | 0.4 (1) | 2.0 | 566 | 2124 ms |
+| ------------ | -------------- | ------------------ | ------ | ------------ | --------------- |
+| 864x480@30   | 480x864        | 24.2 (19)          | 2.8    | 14           | 28.5 ms         |
+| 1600x720@30  | 1080x1920      | 5.4 (1)            | 4.4    | 99           | 179 ms          |
+| 2400x1080@30 | 1512x2688      | 1.3 (1)            | 2.5    | 235          | 644 ms          |
+| 1920x1440@30 | 1512x2688      | 1.6 (1)            | 3.0    | 235          | not read        |
+| 3840x2160@30 | 2160x3840      | 0.4 (1)            | 2.0    | 566          | 2124 ms         |
 
 ### A.7 OPPO A9 2020, H.264
 
-| Mode asked | Size coded | fps (worst second) | Mbit/s | KB per frame | Key frames in 23 to 25 s | Gap over 100 ms |
-| --- | --- | --- | --- | --- | --- | --- |
-| 864x480 | 864x480 | 30.0 (30) | 1.5 | 6 | 12 | none |
-| 1600x720 | 1920x1080 | 30.0 (29) | 6.2 | 25 | 13 | none |
-| 2400x1080 | 2688x1512 | 30.1 (27) | 12.2 | 50 | 12 | one, 260 ms |
-| 1920x1440 | 2688x1512 | 30.1 (29) | 12.2 | 50 | 12 | none |
-| 3840x2160 | 3840x2160 | 25.4 (22) | 21.1 | 101 | 17 | 10, longest 222 ms |
+| Mode asked | Size coded | fps (worst second) | Mbit/s | KB per frame | Key frames in 23 to 25 s | Gap over 100 ms    |
+| ---------- | ---------- | ------------------ | ------ | ------------ | ------------------------ | ------------------ |
+| 864x480    | 864x480    | 30.0 (30)          | 1.5    | 6            | 12                       | none               |
+| 1600x720   | 1920x1080  | 30.0 (29)          | 6.2    | 25           | 13                       | none               |
+| 2400x1080  | 2688x1512  | 30.1 (27)          | 12.2   | 50           | 12                       | one, 260 ms        |
+| 1920x1440  | 2688x1512  | 30.1 (29)          | 12.2   | 50           | 12                       | none               |
+| 3840x2160  | 3840x2160  | 25.4 (22)          | 21.1   | 101          | 17                       | 10, longest 222 ms |
 
 The raw stream has no sequence numbers, so lost frames were not counted for H.264.

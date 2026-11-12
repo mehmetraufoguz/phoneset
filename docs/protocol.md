@@ -251,15 +251,15 @@ frames a second are just modes. After `authed` the phone starts the camera with
 
 Type `0x04` carries one frame:
 
-| field       | size                          | meaning                                                                                                                                                        |
-| ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `seq`       | u32 BE                        | counts frames actually sent, from 0 for each start of the video stream                                                                                         |
-| `timestamp` | u32 BE                        | milliseconds on the phone's steady clock when the frame was captured; it wraps after 49.7 days, so only differences between frames of one stream mean anything |
-| `codec`     | u8                            | how `payload` is coded: 1 `jpeg`, 2 `h264`, 3 `hevc` (see 8.7)                                                                                                 |
+| field       | size                          | meaning                                                                                                                                                                                                                         |
+| ----------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seq`       | u32 BE                        | counts frames actually sent, from 0 for each start of the video stream                                                                                                                                                          |
+| `timestamp` | u32 BE                        | milliseconds on the phone's steady clock when the frame was captured; it wraps after 49.7 days, so only differences between frames of one stream mean anything                                                                  |
+| `codec`     | u8                            | how `payload` is coded: 1 `jpeg`, 2 `h264`, 3 `hevc` (see 8.7)                                                                                                                                                                  |
 | `flags`     | u8                            | bit 0: the frame can be decoded on its own (a key frame); bits 1 and 2: the quarter turns clockwise the receiver applies to the decoded picture to make it upright; bit 3: mirror it horizontally after that. Bits 4 to 7 are 0 |
-| `width`     | u16 BE                        | pixels of the decoded picture                                                                                                                                  |
-| `height`    | u16 BE                        | pixels of the decoded picture                                                                                                                                  |
-| payload     | rest, at most `maxFrameBytes` | the coded picture                                                                                                                                              |
+| `width`     | u16 BE                        | pixels of the decoded picture                                                                                                                                                                                                   |
+| `height`    | u16 BE                        | pixels of the decoded picture                                                                                                                                                                                                   |
+| payload     | rest, at most `maxFrameBytes` | the coded picture                                                                                                                                                                                                               |
 
 The header is 14 bytes. The `codec` must be the one of the `mode` in effect; a frame with another is
 dropped like one that does not decode. For `jpeg` the payload is a complete baseline JPEG that starts with
@@ -367,7 +367,7 @@ check that `phoneset status` uses, so nothing is reachable from the network:
 | `GET /video.mjpg?t=<token>` | `multipart/x-mixed-replace`: every frame as one `image/jpeg` part, newest first, for as long as the client reads |
 | `GET /video.jpg?t=<token>`  | the latest frame as one JPEG (404 until there is one)                                                            |
 | `GET /video?t=<token>`      | a page that shows the stream in a browser                                                                        |
-| `GET /video.h264?t=<token>` | for an `h264` camera: the raw Annex B stream, starting at a key frame (what `ffplay` and `ffmpeg` read as h264)   |
+| `GET /video.h264?t=<token>` | for an `h264` camera: the raw Annex B stream, starting at a key frame (what `ffplay` and `ffmpeg` read as h264)  |
 
 `phoneset video` prints the address, and `phoneset status` shows it while a phone is sending video. A
 reader that is slower than the phone gets the newest frame and misses the ones in between; it never
