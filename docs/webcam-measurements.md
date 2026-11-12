@@ -2,7 +2,7 @@
 
 All of this was measured on 2026-11-11 with the prototype in `main` (a video connection of its own, protocol
 section 8), on two phones, one Mac and one Wi-Fi; the native send path (section 3.1) was measured on 2026-11-12 on
-the branch `native-video`, with the same phones, Mac and Wi-Fi. They are numbers from one room, not guarantees; what
+the branch `native-video` (now merged into `main`), with the same phones, Mac and Wi-Fi. They are numbers from one room, not guarantees; what
 each number does and does not show is written next to it. Sections 1 to 3 are the short version, sections 4 to 6 the
 evidence, the appendix the raw runs.
 
@@ -21,8 +21,8 @@ a second?
   every message, and on the Android phone the JPEG encoder itself. **What limited H.264 at 4K** was the same
   JavaScript hand-over of a 100 to 170 KB frame (on the OPPO), and on the iPhone the coder's delay, which keeping two
   pictures in the coder removed.
-- **The native send path** (frames sealed and sent by Swift and Kotlin, not through JavaScript; branch
-  `native-video`, not in `main`) took the base64 work away: iPhone JPEG went from 38.7 to 58.6 fps at 1080p60, 24.4 to
+- **The native send path** (frames sealed and sent by Swift and Kotlin, not through JavaScript; now in
+  `main`) took the base64 work away: iPhone JPEG went from 38.7 to 58.6 fps at 1080p60, 24.4 to
   59.4 at 2K60 and 5.7 to 30.0 at 4K30 (up to 182 Mbit/s over Wi-Fi), and the OPPO's H.264 at 4K went from 25.3 to
   30.0 fps with no stall over 100 ms. Where JavaScript was not the limit (JPEG up to 1080p30 and H.264 up to 2K60 on
   the iPhone, JPEG on the OPPO) it changed nothing. A reader that joins a stream now gets a picture after 40 to
@@ -40,7 +40,7 @@ a second?
 | PC side          | accepts `jpeg` and `h264`, shows JPEG as MJPEG at `/video.mjpg` and `/video`, passes H.264 on as a raw Annex B stream at `/video.h264`; it does not decode H.264     |
 | Window           | 3 frames and 2 MB in flight (it was 2 frames and 256 KB)                                                                                                             |
 | Coder pipeline   | 2 pictures asked for ahead, for H.264 only                                                                                                                           |
-| Native send path | not in `main`: the branch `native-video` has it on both platforms (section 3.1); `main` still sends every frame through JavaScript                                   |
+| Native send path | in `main` since 2026-11-12, on both platforms (section 3.1): frames are sealed and sent natively                                                                     |
 | Not built        | a decoder on the PC, a virtual camera, the link test of protocol 8.8, the subscription, a mode picker, thermal-aware mode changes                                    |
 
 Changes made because of the measurements, in order:
@@ -89,7 +89,7 @@ below it, 4K60 from the older window); the iPhone H.264 numbers from 480p30 to 7
 in the coder, the rest with two (appendix A.5). The scene was not the same in every run and a frame's size depends on
 it, so Mbit/s differ a little between runs.
 
-### 3.1 With the native send path (branch `native-video`, 2026-11-12)
+### 3.1 With the native send path (2026-11-12)
 
 What was built (commits `a6c8f9e`, `a172042`, `a709e38`, `c20a050`, `bd0a389`): JavaScript still opens the video
 connection, authenticates and negotiates the mode, on a socket that Swift (`URLSessionWebSocketTask`) or Kotlin
@@ -212,8 +212,8 @@ less work on the JavaScript thread, which was not read), the latency from camera
   30 fps: 15 fps at 2K30; every third at 60 fps: 20 fps at 2K60). At 1080p30 the phone's counters showed it: the
   next picture was asked for 30 ms after the last was handed over and 17.8 JPEGs a second were made out of the
   camera's 29.9; with 3 frames and 2 MB it is asked for after 0.1 ms and all 29.9 are made (table in appendix A.4).
-- **The hand-over to the socket was the next limit (fixed on the branch `native-video`: section 3.1; this describes
-  the JavaScript path of `main`).** React Native's `WebSocket.send` turns a binary
+- **The hand-over to the socket was the next limit (fixed by the native send path: section 3.1; this describes
+  the JavaScript path that was used before it).** React Native's `WebSocket.send` turns a binary
   message into base64 in JavaScript (`binaryToBase64`) before `sendBinary` hands it to the native side, and the call
   returns without waiting for the network, so this is work on the phone. It costs 5.7 ms for a 66 KB frame, 13 ms for
   144 KB, 20 ms for 185 KB and about 160 ms for 749 KB (5 to 12 MB/s), plus a fixed cost of about 4 ms per message
@@ -308,9 +308,9 @@ that the rotation values really make the picture upright on a screen.
    a webcam early. Untested.
 3. **Decoder and virtual camera on the PC** (Windows 11 `MFCreateVirtualCamera`, a camera extension on the Mac; the
    decoder from the operating system or ffmpeg). The main piece of work; the relay's resync rule needs replacing first.
-4. **Native send path**: built and measured on the branch `native-video` (section 3.1). It is what lets JPEG carry 4K30 on
-   the iPhone and H.264 carry 4K30 on the OPPO, and it gives a joining reader a picture in about 100 ms. Whether to merge
-   it into `main` is not decided; its processor and heat cost is not measured.
+4. **Native send path**: built, measured (section 3.1) and merged into `main`. It is what lets JPEG carry 4K30 on
+   the iPhone and H.264 carry 4K30 on the OPPO, and it gives a joining reader a picture in about 100 ms. Its processor
+   and heat cost is not measured.
 5. **Mode choice and heat**: let the user pick a tier, lower it when the phone warms up (iOS can read
    `ProcessInfo.thermalState`), offer only modes the phone has been seen to carry, and make a mode name what the frame
    is on Android.
