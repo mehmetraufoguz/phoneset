@@ -33,17 +33,9 @@ interface PhonesetCameraModule {
   socketReceive?(id: number): Promise<unknown>
   socketSend?(id: number, data: Uint8Array): void
   socketClose?(id: number): void
-  pipeStart?(
-    id: number,
-    sendKey: Uint8Array,
-    receiveKey: Uint8Array,
-    transcript: Uint8Array,
-    sent: number,
-    received: number,
-    windowFrames: number,
-    windowBytes: number,
-    depth: number
-  ): Promise<void>
+  // `material` is the send key, the receive key and the transcript, one after the other; `settings` is sent,
+  // received, window frames, window bytes and depth (packed: Expo's Kotlin functions take at most eight arguments).
+  pipeStart?(id: number, material: Uint8Array, settings: number[]): Promise<void>
   pipeControl?(): Promise<string>
   pipeNumbers?(): Record<string, number>
   pipeStop?(): void
@@ -61,6 +53,17 @@ const bytes = (value: unknown): Uint8Array =>
     : value instanceof ArrayBuffer
       ? new Uint8Array(value)
       : Uint8Array.from(value as ArrayLike<number>)
+
+/** The arrays one after the other in a new one. */
+const joined = (...parts: Uint8Array[]): Uint8Array => {
+  const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0))
+  let at = 0
+  for (const part of parts) {
+    out.set(part, at)
+    at += part.length
+  }
+  return out
+}
 
 const ensurePermission = Effect.tryPromise({
   try: async () => {
@@ -107,14 +110,8 @@ const nativeVideo: NativeVideo | null =
               try: () =>
                 (native as Required<PhonesetCameraModule>).pipeStart(
                   handover.socketId,
-                  handover.sendKey,
-                  handover.receiveKey,
-                  handover.transcript,
-                  handover.sent,
-                  handover.received,
-                  VIDEO_WINDOW.frames,
-                  VIDEO_WINDOW.bytes,
-                  depth
+                  joined(handover.sendKey, handover.receiveKey, handover.transcript),
+                  [handover.sent, handover.received, VIDEO_WINDOW.frames, VIDEO_WINDOW.bytes, depth]
                 ),
               catch: transport("The video connection didn't start.")
             }),

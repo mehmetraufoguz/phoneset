@@ -114,14 +114,20 @@ public class PhonesetCameraModule: Module {
     }
 
     // Takes the connection over: from here the pipe seals and sends the frames and reads the acknowledgements.
-    AsyncFunction("pipeStart") {
-      (id: Int, sendKey: Data, receiveKey: Data, transcript: Data, sent: Int, received: Int, windowFrames: Int,
-        windowBytes: Int, depth: Int) throws in
+    // The arguments are packed, the same on both platforms (Expo's Kotlin functions take at most eight): `material`
+    // is the send key, the receive key (32 bytes each) and the transcript; `settings` is sent, received, window
+    // frames, window bytes, depth.
+    AsyncFunction("pipeStart") { (id: Int, material: Data, settings: [Double]) throws in
       guard let socket = self.socket(id) else { throw CameraException("The connection is gone.") }
+      guard material.count > 64, settings.count >= 5 else {
+        throw CameraException("The video connection was handed over wrongly.")
+      }
+      let bytes = [UInt8](material)
       self.pipe?.stop("A new video connection started.")
       let pipe = PhonesetVideoPipe(
-        socket: socket, sendKey: sendKey, receiveKey: receiveKey, transcript: transcript, sent: UInt64(sent),
-        received: UInt64(received), window: .init(frames: windowFrames, bytes: windowBytes), depth: depth,
+        socket: socket, sendKey: Data(bytes[0..<32]), receiveKey: Data(bytes[32..<64]),
+        transcript: Data(bytes[64...]), sent: UInt64(settings[0]), received: UInt64(settings[1]),
+        window: .init(frames: Int(settings[2]), bytes: Int(settings[3])), depth: Int(settings[4]),
         source: self.camera)
       self.pipe = pipe
       pipe.start()
