@@ -2,6 +2,8 @@ import { Cause, Context, Effect, Layer, Queue, type Scope } from "effect"
 import { TransportError } from "./errors"
 
 export interface Socket {
+  /** Set when the socket is run by native code, which can then take the connection over (core/camera.ts). */
+  readonly nativeId?: number
   readonly send: (data: Uint8Array) => Effect.Effect<void, TransportError>
   /** Next binary message; fails with TransportError once the socket is closed. */
   readonly receive: Effect.Effect<Uint8Array, TransportError>

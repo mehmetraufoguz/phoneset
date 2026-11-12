@@ -303,6 +303,14 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     pending.callback(frame, nil)
   }
 
+  /// The next picture is to be a key frame (a reader of the video asked for one). JPEG has nothing to do:
+  /// every JPEG is one.
+  func requestKeyFrame() {
+    lock.lock()
+    needKey = true
+    lock.unlock()
+  }
+
   /// What the camera side has done since it started, for measuring.
   func stats() -> [String: Double] {
     lock.lock()

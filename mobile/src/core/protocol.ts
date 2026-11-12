@@ -159,6 +159,8 @@ export type ClientMessage =
       /** What the phone is about to send, and everything it is willing to send. */
       readonly mode?: VideoMode
       readonly modes?: ReadonlyArray<VideoMode>
+      /** Extras this phone supports; "keyreq": it makes a key frame when the PC asks (docs/protocol.md, 8.3). */
+      readonly features?: ReadonlyArray<string>
     }
 
 export const encodeClientMessage = (message: ClientMessage): Uint8Array =>

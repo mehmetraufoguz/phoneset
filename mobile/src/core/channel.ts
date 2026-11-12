@@ -5,10 +5,23 @@ import { Crypto, protocolOf } from "./crypto"
 import { ProtocolError, type TransportError } from "./errors"
 import { SocketFactory } from "./socket"
 
+/** What native code needs to carry on with a connection: the keys, and where the counters stand. */
+export interface Handover {
+  readonly socketId: number
+  readonly sendKey: Uint8Array
+  readonly receiveKey: Uint8Array
+  readonly transcript: Uint8Array
+  /** Messages sent and received so far (the nonces continue from them). */
+  readonly sent: number
+  readonly received: number
+}
+
 /** An authenticated-encryption layer over a Socket (see docs/protocol.md). */
 export interface Channel {
   /** Binds proofs to this handshake. */
   readonly transcript: Uint8Array
+  /** For a socket run by native code: the state to hand over. After it the channel must not be used. */
+  readonly handover?: () => Handover
   readonly send: (
     type: number,
     ...parts: ReadonlyArray<Uint8Array>
@@ -53,8 +66,20 @@ export const openChannel = Effect.fn("Channel.open")(function* (url: string) {
   let sent = 0
   let received = 0
 
+  const nativeId = socket.nativeId
   const channel: Channel = {
     transcript,
+    handover:
+      nativeId === undefined
+        ? undefined
+        : () => ({
+            socketId: nativeId,
+            sendKey: keys.send,
+            receiveKey: keys.receive,
+            transcript,
+            sent,
+            received
+          }),
     send: (type, ...parts) =>
       Effect.suspend(() => {
         const sealed = seal(keys.send, sent++, transcript, concat(Uint8Array.of(type), ...parts))

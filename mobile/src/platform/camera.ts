@@ -1,9 +1,15 @@
 import { Effect, Layer } from "effect"
 import { requireOptionalNativeModule } from "expo"
 import { Camera } from "expo-camera"
-import { type CameraCapabilities, CameraIO, type CameraStats } from "../core/camera"
-import { VIDEO_QUALITY } from "../core/constants"
-import { CameraError } from "../core/errors"
+import {
+  type CameraCapabilities,
+  CameraIO,
+  type CameraStats,
+  type NativeVideo,
+  type PipeNumbers
+} from "../core/camera"
+import { VIDEO_QUALITY, VIDEO_WINDOW } from "../core/constants"
+import { CameraError, TransportError } from "../core/errors"
 
 // The native module in modules/phoneset-camera: CameraX on Android, AVFoundation on iOS. Where it is
 // missing (a development build made before it was added) the camera is simply not offered.
@@ -21,6 +27,26 @@ interface PhonesetCameraModule {
   capabilities(facing: string): CameraCapabilities
   stop(): void
   stats(): Record<string, number>
+  // The native video connection (absent in a build made before it was added).
+  nativePipe?(): boolean
+  socketConnect?(url: string): Promise<number>
+  socketReceive?(id: number): Promise<unknown>
+  socketSend?(id: number, data: Uint8Array): void
+  socketClose?(id: number): void
+  pipeStart?(
+    id: number,
+    sendKey: Uint8Array,
+    receiveKey: Uint8Array,
+    transcript: Uint8Array,
+    sent: number,
+    received: number,
+    windowFrames: number,
+    windowBytes: number,
+    depth: number
+  ): Promise<void>
+  pipeControl?(): Promise<string>
+  pipeNumbers?(): Record<string, number>
+  pipeStop?(): void
 }
 
 const native = requireOptionalNativeModule<PhonesetCameraModule>("PhonesetCamera")
@@ -45,8 +71,68 @@ const ensurePermission = Effect.tryPromise({
     new CameraError({ message: "Camera access is off. Turn it on for phoneset in Settings." })
 })
 
+const transport = (fallback: string) => (cause: unknown) =>
+  new TransportError({ message: cause instanceof Error ? cause.message : fallback })
+
+/** The native video connection, where this build of the module has it. */
+const nativeVideo: NativeVideo | null =
+  native?.nativePipe?.() === true
+    ? {
+        connect: (url) =>
+          Effect.gen(function* () {
+            const module = native as Required<PhonesetCameraModule>
+            const id = yield* Effect.acquireRelease(
+              Effect.tryPromise({
+                try: () => module.socketConnect(url),
+                catch: transport("Couldn't reach the PC.")
+              }),
+              (id) => Effect.sync(() => module.socketClose(id))
+            )
+            return {
+              nativeId: id,
+              send: (data) =>
+                Effect.try({
+                  try: () => module.socketSend(id, data),
+                  catch: transport("The connection dropped.")
+                }),
+              receive: Effect.tryPromise({
+                try: () => module.socketReceive(id),
+                catch: transport("The connection closed.")
+              }).pipe(Effect.map(bytes))
+            }
+          }),
+        start: (handover, depth) =>
+          Effect.acquireRelease(
+            Effect.tryPromise({
+              try: () =>
+                (native as Required<PhonesetCameraModule>).pipeStart(
+                  handover.socketId,
+                  handover.sendKey,
+                  handover.receiveKey,
+                  handover.transcript,
+                  handover.sent,
+                  handover.received,
+                  VIDEO_WINDOW.frames,
+                  VIDEO_WINDOW.bytes,
+                  depth
+                ),
+              catch: transport("The video connection didn't start.")
+            }),
+            () => Effect.sync(() => (native as Required<PhonesetCameraModule>).pipeStop())
+          ),
+        control: Effect.tryPromise({
+          try: () => (native as Required<PhonesetCameraModule>).pipeControl(),
+          catch: transport("The video ended.")
+        }),
+        numbers: Effect.sync(
+          () => (native as Required<PhonesetCameraModule>).pipeNumbers() as unknown as PipeNumbers
+        )
+      }
+    : null
+
 export const CameraLive = Layer.succeed(CameraIO, {
   available: native?.isAvailable() === true,
+  native: nativeVideo,
   // JPEG is made on the CPU and h264 by the hardware encoder, on both platforms.
   codecs: ["jpeg", "h264"],
   ensurePermission,

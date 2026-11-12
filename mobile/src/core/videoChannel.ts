@@ -113,8 +113,14 @@ export const runVideo = Effect.fn("Video.run")(function* (
   const camera = yield* CameraIO
   const { proof } = protocolOf(crypto)
 
+  // Where the platform has a native pipe, the connection is opened on a socket that native code runs, so it can
+  // take the connection over once it is authenticated (below); otherwise the frames go through JavaScript.
+  const nativePipe = camera.native
   const channel = yield* openChannel(target.url).pipe(
-    Effect.provideService(SocketFactory, sockets),
+    Effect.provideService(
+      SocketFactory,
+      nativePipe === null ? sockets : { connect: nativePipe.connect }
+    ),
     Effect.provideService(Crypto, crypto)
   )
   const send = (m: ClientMessage) => channel.send(Frame.control, encodeClientMessage(m))
@@ -155,7 +161,15 @@ export const runVideo = Effect.fn("Video.run")(function* (
     })
 
   const session: CameraSession = yield* camera.open(target.facing, mode)
-  yield* send({ t: "video", on: true, camera: target.facing, mode, modes })
+  yield* send({
+    t: "video",
+    on: true,
+    camera: target.facing,
+    mode,
+    modes,
+    // The native pipe makes a key frame when the PC asks for one; the JavaScript path cannot.
+    ...(nativePipe !== null && channel.handover !== undefined ? { features: ["keyreq"] } : {})
+  })
   yield* report({ fps: 0, kBps: 0, ackMs: null, sendMs: null, viewers: 0, camera: null }) // the camera is on
 
   const window = new Window()
@@ -259,6 +273,42 @@ export const runVideo = Effect.fn("Video.run")(function* (
       )
     )
   )
+
+  // The native pipe has the connection: JavaScript only looks at the control messages the pipe passes on (it
+  // answers the acknowledgements and the key frame requests itself) and reports the numbers once a second.
+  const handover = channel.handover
+  if (nativePipe !== null && handover !== undefined) {
+    yield* nativePipe.start(handover(), mode.codec === "h264" ? 2 : 1)
+    const nativeReceive = Effect.forever(
+      nativePipe.control.pipe(
+        Effect.flatMap((text) => decodeVideoMessage(utf8(text))),
+        Effect.flatMap(handle)
+      )
+    )
+    const nativeReporter = Effect.forever(
+      Effect.sleep(REPORT_EVERY).pipe(
+        Effect.andThen(
+          Effect.gen(function* () {
+            const now = Date.now()
+            const seconds = Math.max(0.001, (now - since) / 1000)
+            const n = yield* nativePipe.numbers
+            const stats = yield* session.stats
+            yield* report({
+              fps: n.sentFrames / seconds,
+              kBps: n.sentBytes / seconds / 1000,
+              ackMs: n.acks === 0 ? null : (n.ackSeconds / n.acks) * 1000,
+              sendMs: n.sends === 0 ? null : (n.sendSeconds / n.sends) * 1000,
+              viewers,
+              camera: stats
+            })
+            since = now
+          })
+        )
+      )
+    )
+    yield* Effect.all([nativeReceive, nativeReporter], { concurrency: "unbounded", discard: true })
+    return
+  }
 
   // The first of the three to fail ends the video and stops the others; interrupting this ends all.
   yield* Effect.all([receive, pump, reporter], { concurrency: "unbounded", discard: true })

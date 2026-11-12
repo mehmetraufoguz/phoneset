@@ -1,5 +1,7 @@
 import { Context, type Effect, type Scope } from "effect"
-import type { CameraError } from "./errors"
+import type { Handover } from "./channel"
+import type { CameraError, TransportError } from "./errors"
+import type { Socket } from "./socket"
 
 export type Facing = "back" | "front"
 
@@ -42,6 +44,38 @@ export interface CameraSession {
   readonly stats: Effect.Effect<CameraStats>
 }
 
+/** What the native pipe did since it was last asked (see [NativeVideo.numbers]). */
+export interface PipeNumbers {
+  readonly sentFrames: number
+  readonly sentBytes: number
+  /** Seconds spent from sending frames to their acknowledgements, and how many were acknowledged. */
+  readonly ackSeconds: number
+  readonly acks: number
+  /** Seconds spent sealing frames and handing them to the socket, and how many. */
+  readonly sendSeconds: number
+  readonly sends: number
+}
+
+/**
+ * Where the platform can run the video connection natively. JavaScript opens the socket and does the handshake,
+ * the authentication and the mode negotiation on it; `start` then hands the connection over, and from there the
+ * frames are pulled from the camera, sealed, sent and acknowledged without passing through JavaScript (React
+ * Native turns every message that does into base64). Absent where the module does not have it: the frames
+ * then go through JavaScript.
+ */
+export interface NativeVideo {
+  /** Opens a socket run by native code; closing the scope closes it. */
+  readonly connect: (url: string) => Effect.Effect<Socket, TransportError, Scope.Scope>
+  /** Takes the authenticated connection over; closing the scope stops the pipe. `depth`: pictures asked for ahead. */
+  readonly start: (
+    handover: Handover,
+    depth: number
+  ) => Effect.Effect<void, TransportError, Scope.Scope>
+  /** The next control message from the PC that JavaScript has to look at (not the acknowledgements, which the pipe handles); fails when the pipe has ended. */
+  readonly control: Effect.Effect<string, TransportError>
+  readonly numbers: Effect.Effect<PipeNumbers>
+}
+
 /** The phone's camera as a source of JPEG frames. Provided by the platform. */
 export class CameraIO extends Context.Service<
   CameraIO,
@@ -53,6 +87,8 @@ export class CameraIO extends Context.Service<
     readonly ensurePermission: Effect.Effect<void, CameraError>
     /** Read from the system, never assumed. */
     readonly capabilities: (facing: Facing) => Effect.Effect<CameraCapabilities, CameraError>
+    /** The native pipe, where the platform has one. */
+    readonly native: NativeVideo | null
     /** Opens the camera for a mode; closing the scope stops it. */
     readonly open: (
       facing: Facing,
