@@ -5,7 +5,6 @@ package discovery
 import (
 	"fmt"
 	"net"
-	"os"
 	"sort"
 	"strings"
 
@@ -118,14 +117,13 @@ func advertiseInterfaces() []net.Interface {
 func Advertise(id, name string, port int) (func(), error) {
 	instance := fmt.Sprintf("phoneset-%s", id)
 	text := []string{fmt.Sprintf("v=%d", proto.Version), "id=" + id, "n=" + name}
-	// The app only uses IPv4 addresses, and a phone whose system hands it one address per service may be given an
-	// IPv6 one (a Windows machine lists those too), which it then ignores. So the answer carries the IPv4 addresses
-	// of the reachable interfaces and nothing else.
-	if host, err := os.Hostname(); err == nil {
-		if ips := Addrs(); len(ips) > 0 {
-			if srv, err := zeroconf.RegisterProxy(instance, proto.ServiceType, "local.", port, host, ips, text, advertiseInterfaces()); err == nil {
-				return srv.Shutdown, nil
-			}
+	// The service points to a host name of its own, with only the IPv4 addresses of the reachable interfaces. The
+	// machine's own name is answered by the operating system too, with all its addresses (IPv6, loopback aliases,
+	// VPN adapters), and a phone whose system hands it one address per service may be given one it can't use (the
+	// app ignores anything but IPv4) or can't reach. Nothing else answers for this name.
+	if ips := Addrs(); len(ips) > 0 {
+		if srv, err := zeroconf.RegisterProxy(instance, proto.ServiceType, "local.", port, instance, ips, text, advertiseInterfaces()); err == nil {
+			return srv.Shutdown, nil
 		}
 	}
 	// With no usable address or interface (an unusual network) the library's own choice, all of them, is kept.
