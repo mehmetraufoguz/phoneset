@@ -133,7 +133,8 @@ const videoHTML = `<!doctype html>
     desc.set(sps, 8); desc.set([1, pps.length >> 8, pps.length & 255], 8 + sps.length); desc.set(pps, 11 + sps.length);
     metas = new Map(); needKey = true; config = key;
     decoder = new VideoDecoder({
-      output: (f) => { const m = metas.get(f.timestamp); metas.delete(f.timestamp); if (m) draw(f, m.w, m.h, m.rot, m.mirror); f.close(); },
+      // The decoded picture's own size is used, not the one in the record: they are the same unless a coder pads or crops.
+      output: (f) => { const m = metas.get(f.timestamp); metas.delete(f.timestamp); if (m) draw(f, f.displayWidth, f.displayHeight, m.rot, m.mirror); f.close(); },
       error: (e) => { problem = "The decoder stopped: " + e.message; decoder = null; config = ""; }
     });
     decoder.configure({ codec, description: desc, optimizeForLatency: true });
