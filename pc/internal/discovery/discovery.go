@@ -5,6 +5,7 @@ package discovery
 import (
 	"fmt"
 	"net"
+	"os"
 	"sort"
 	"strings"
 
@@ -115,13 +116,20 @@ func advertiseInterfaces() []net.Interface {
 
 // Advertise publishes _phoneset._tcp. The returned function stops it.
 func Advertise(id, name string, port int) (func(), error) {
-	// With no usable interface (an unusual network) the library's own choice, all of them, is kept.
-	srv, err := zeroconf.Register(
-		fmt.Sprintf("phoneset-%s", id),
-		proto.ServiceType, "local.", port,
-		[]string{fmt.Sprintf("v=%d", proto.Version), "id=" + id, "n=" + name},
-		advertiseInterfaces(),
-	)
+	instance := fmt.Sprintf("phoneset-%s", id)
+	text := []string{fmt.Sprintf("v=%d", proto.Version), "id=" + id, "n=" + name}
+	// The app only uses IPv4 addresses, and a phone whose system hands it one address per service may be given an
+	// IPv6 one (a Windows machine lists those too), which it then ignores. So the answer carries the IPv4 addresses
+	// of the reachable interfaces and nothing else.
+	if host, err := os.Hostname(); err == nil {
+		if ips := Addrs(); len(ips) > 0 {
+			if srv, err := zeroconf.RegisterProxy(instance, proto.ServiceType, "local.", port, host, ips, text, advertiseInterfaces()); err == nil {
+				return srv.Shutdown, nil
+			}
+		}
+	}
+	// With no usable address or interface (an unusual network) the library's own choice, all of them, is kept.
+	srv, err := zeroconf.Register(instance, proto.ServiceType, "local.", port, text, advertiseInterfaces())
 	if err != nil {
 		return nil, err
 	}
