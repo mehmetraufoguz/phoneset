@@ -37,18 +37,26 @@ func Addrs() []string {
 		addrs, _ := ifc.Addrs()
 		for _, a := range addrs {
 			ipnet, ok := a.(*net.IPNet)
-			if !ok {
+			if !ok || !reachable(ipnet) {
 				continue
 			}
-			ip := ipnet.IP.To4()
-			if ip == nil || !ip.IsPrivate() {
-				continue
-			}
-			out = append(out, ip.String())
+			out = append(out, ipnet.IP.To4().String())
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i] == preferred && out[j] != preferred })
 	return out
+}
+
+// reachable reports whether a phone on the network could use this address: a private IPv4 address on a
+// network with room for other hosts. An address with a /32 mask (the VPN adapter 10.77.0.10/32 of a
+// peerlink machine) has no neighbours, so a phone that is given it can't reach the PC.
+func reachable(n *net.IPNet) bool {
+	ip := n.IP.To4()
+	if ip == nil || !ip.IsPrivate() {
+		return false
+	}
+	ones, bits := n.Mask.Size()
+	return bits == 32 && ones < 32
 }
 
 func skipped(name string) bool {
@@ -96,11 +104,9 @@ func advertiseInterfaces() []net.Interface {
 		}
 		addrs, _ := ifc.Addrs()
 		for _, a := range addrs {
-			if ipnet, ok := a.(*net.IPNet); ok {
-				if ip := ipnet.IP.To4(); ip != nil && ip.IsPrivate() {
-					out = append(out, ifc)
-					break
-				}
+			if ipnet, ok := a.(*net.IPNet); ok && reachable(ipnet) {
+				out = append(out, ifc)
+				break
 			}
 		}
 	}
