@@ -54,7 +54,7 @@ is doing). A system provides a `Backend` (probe, install, uninstall, start) and 
 | System  | Backend                                                                                                                                                                                                                                                                                                   | State                                                                                                                                                                                                                                  |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS   | `phoneset Camera.app` in `/Applications` (a camera extension and a helper without a window); the program starts it when a phone begins to send video                                                                                                                                                      | works; `phoneset camera install` puts it in place and asks macOS to turn it on, then the user allows it once in System Settings                                                                                                        |
-| Windows | none of its own yet; `phoneset camera` says to use OBS Studio's Virtual Camera                                                                                                                                                                                                                            | OBS bridge works. Own camera: a DirectShow filter on Windows 10, `MFCreateVirtualCamera` on Windows 11 (build 22000 and newer), each a native component that reads `/video.frames`, behind the same commands and the same tray section |
+| Windows | none of its own yet; `phoneset camera` says to use OBS Studio's Virtual Camera                                                                                                                                                                                                                            | OBS bridge works. Own camera: a DirectShow filter on Windows 10 (a test picture works, `windows/`; not the phone's picture yet), `MFCreateVirtualCamera` on Windows 11 (build 22000 and newer), each a native component that reads `/video.frames`, behind the same commands and the same tray section |
 | Linux   | none yet; the plan is v4l2loopback (a kernel module that makes `/dev/videoN`) fed by the program through `ffmpeg` (reading `/video.h264` or `/video.mjpg`, turning it upright with the record's rotation, writing to the device); `install` would check for the module and ffmpeg and say what is missing | not built and not tried: no Linux machine to test on                                                                                                                                                                                   |
 
 The macOS app is only a helper: its window is gone (it has none), it is started with `--background`, `--install` or
@@ -122,9 +122,24 @@ Each phase ends with something that can be seen, and the next one starts only wh
    an existing release and to its `SHA256SUMS`), by hand on the owner's Mac. Checked: the notarized build installed from
    a download (a local fake release), macOS took its extension without a new approval, and the owner saw the iPhone's
    picture through it. Not checked: the download from a real GitHub release.
-3. **Windows.** A separate plan. Windows 11 (build 22000 and newer) has `MFCreateVirtualCamera`; Windows 10 needs a
-   DirectShow filter registered by an administrator; both need a native (C++) component that reads `/video.frames`.
-   Until then OBS's Virtual Camera is the way on Windows (it works, see the measurements report).
+3. **Windows.** Windows 11 (build 22000 and newer) has `MFCreateVirtualCamera`; Windows 10 needs a DirectShow filter
+   registered by an administrator; both need a native (C++) component that reads `/video.frames`. Until it is done
+   OBS's Virtual Camera is the way on Windows (it works, see the measurements report).
+   - **3a. Does a DirectShow camera of ours work on Windows 10? _Done 2026-11-15_ (build 19045, see `windows/README.md`):**
+     yes. softcam (MIT, a DirectShow source filter with a sender API), built with our own name, CLSID and shared memory
+     names by `windows/build.ps1`, registered by `windows/install.ps1`, showed a moving test picture in ffmpeg, OBS,
+     Chrome and Edge (the owner saw it). Learned: the DLL has to be in `C:\Program Files\phoneset\camera` (readable by
+     `ALL APPLICATION PACKAGES`), because Chrome and Edge read cameras in a sandboxed process that cannot load a DLL from
+     a user folder; registering needs an administrator (UAC), so `phoneset camera install` on Windows has to ask for it;
+     with no sender running the camera cannot be opened at all (no output pin), so the "Waiting for your phone" slate
+     needs either a helper that keeps a sender alive or a change to the filter so that it makes its pin and the slate
+     itself (the second matches macOS, where the extension has its own slate, and works while the program is not
+     running); only an x64 DLL, so 32-bit camera programs do not see it. Not tried: the Windows Camera app, Zoom, Teams.
+   - **3b. The phone's picture.** A helper reads `/video.frames`, decodes (Media Foundation for H.264, WIC for JPEG), turns
+     it upright, fits it into 1280 x 720 and writes it through the sender API. _Not started._
+   - **3c. A product.** A Windows `Backend` in `pc/internal/camera` (download the signed zip from the release, ask for
+     administrator rights, register, remove), the tray section, `phoneset update`. Windows 11 with `MFCreateVirtualCamera`
+     is looked at separately. _Not started._
 
 ## 5. Not decided, and not part of the first version
 
