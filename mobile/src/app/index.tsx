@@ -7,6 +7,7 @@ import { Session } from "../core/session"
 import { type PairedPc, PairedPcs } from "../core/storage"
 import { act, BRAND, useColors, useDiscovered, usePairedPcs, useSessionState } from "../ui/hooks"
 import { canSwipeToForget, swipeToForget } from "../ui/swipeToForget"
+import { tappableRow } from "../ui/tappableRow"
 import { toolbarButton } from "../ui/toolbar"
 
 /** How long the Undo row stays after a PC is forgotten. */
@@ -48,15 +49,15 @@ export default function Home() {
 
   const details = (pc: PairedPc) => {
     const info = detail(pc)
-    return (
-      <Button variant="text" onPress={() => open(pc)}>
-        <Column spacing={2}>
-          <Text textStyle={{ fontSize: 17, fontWeight: "600" }}>
-            {connectedId === pc.id ? `● ${pc.name}` : pc.name}
-          </Text>
-          <Text textStyle={{ fontSize: 13, color: info.color }}>{info.text}</Text>
-        </Column>
-      </Button>
+    // The whole width of the row answers a tap, not only the text.
+    return tappableRow(
+      <Column spacing={2}>
+        <Text textStyle={{ fontSize: 17, fontWeight: "600" }}>
+          {connectedId === pc.id ? `● ${pc.name}` : pc.name}
+        </Text>
+        <Text textStyle={{ fontSize: 13, color: info.color }}>{info.text}</Text>
+      </Column>,
+      () => open(pc)
     )
   }
 
@@ -126,7 +127,6 @@ export default function Home() {
                     pc.id,
                     <Row key={pc.id} alignment="center" spacing={8}>
                       {details(pc)}
-                      <Spacer flexible />
                       {canSwipeToForget ? null : (
                         <Button variant="text" label="Forget" onPress={() => forget(pc)} />
                       )}

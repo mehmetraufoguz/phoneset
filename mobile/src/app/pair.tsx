@@ -1,6 +1,6 @@
 import { Button, FieldGroup, Host, Text, TextInput } from "@expo/ui"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { Alert } from "react-native"
 import { DEFAULT_PORT } from "../core/constants"
 import type { DiscoveredPc } from "../core/discovery"
@@ -8,6 +8,7 @@ import { parsePairLink } from "../core/link"
 import { Session, type Target } from "../core/session"
 import { runtime } from "../runtime"
 import { act, BRAND, useColors, useDiscovered } from "../ui/hooks"
+import { tappableRow } from "../ui/tappableRow"
 
 const digits = (s: string) => s.replace(/\D/g, "")
 const enc = (s: string | undefined) => encodeURIComponent(s ?? "")
@@ -105,12 +106,12 @@ export default function Pair() {
             <Text textStyle={{ color: colors.secondary }}>Looking for PCs on this Wi-Fi…</Text>
           ) : (
             nearby.map((pc) => (
-              <Button
-                key={pc.id}
-                variant="text"
-                label={`Pair with ${pc.name}`}
-                onPress={() => pairWith(pc)}
-              />
+              <Fragment key={pc.id}>
+                {tappableRow(
+                  <Text textStyle={{ color: BRAND }}>{`Pair with ${pc.name}`}</Text>,
+                  () => pairWith(pc)
+                )}
+              </Fragment>
             ))
           )}
         </FieldGroup.Section>
