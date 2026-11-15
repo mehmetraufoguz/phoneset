@@ -287,18 +287,43 @@ the camera itself delivered only 23.9 fps (not looked into).
   crashed about 9 s after Headphones was switched on, with a CoreAudio "RPC timeout" in the log, three times out of
   three. On the iPhone the same step ran 55 s with the camera on and did not crash, so it looks specific to the
   Simulator; a build without the video changes was not tried there.
+- **The PC side on Windows 10** (22H2, build 19045; the OPPO A9 2020 over Wi-Fi; checked 2026-11-15 by a Claude session
+  on that PC, with the user looking at the screen): the agent builds as in CI (`CGO_ENABLED=0`) and runs; pairing by
+  address and code works; rear and front camera, H.264 and JPEG, 480p to 2160p modes reach the browser page in Chrome
+  and a Chromium pane (front camera up to 1920 x 1080 only, a limit of the phone; rear 4K at about 30 fps), with
+  rotation 1 (rear H.264), 3 (front H.264) and 0 (JPEG). **OBS Studio 32.2.1** shows the page in a Browser source with
+  both JPEG and H.264, and its Virtual Camera was picked as a camera on a camera test web site and showed the picture:
+  the bridge from phone to PC to a camera other programs can pick works on Windows 10. Not tried: the Windows Camera
+  app, Edge, Firefox, a sustained run. Windows 10 has no `MFCreateVirtualCamera` (it needs build 22000), so a virtual
+  camera of our own there would be a DirectShow filter; Visual Studio 2022 with the C++ tools and the Windows SDK are
+  installed on that PC.
+- **Windows mDNS discovery** did not find the PC on the Android phone (an iPhone did) and took four fixes: skip /32
+  addresses such as a VPN adapter's own (`f700d64`), advertise IPv4 only (`afaa138`), point the service to a host name
+  of its own because the operating system answers for the machine's name with all its addresses (`1e3f1ed`), and,
+  decisive, send multicast out of the Wi-Fi interface (`790d248`): on Windows `golang.org/x/net/ipv4` ignores the
+  interface of a packet, so the zeroconf library's multicast left by whichever interface the system prefers for
+  224.0.0.0/4 (route metrics on that PC: WSL 271, VPN 281, Wi-Fi 286). The library is copied into
+  `pc/third_party/zeroconf` with that one change. Confirmed on the phone (logcat: the service found in 0.2 s). Not
+  checked: a Windows PC with only one network adapter, or a Mac with several.
+- **The Android app does not build on that Windows PC**: the NDK's `make.exe` crashes (0xc0000005) on output paths over 260
+  characters even with long paths enabled, `ninja` fails in react-native-screens and worklets for the same reason (the
+  nested `node_modules/.pnpm` paths), and the audio-api prebuilt download script needs `curl` and `mkdir` in Git's bash.
+  Android builds are made on the Mac (or in EAS); the APK was handed to the Windows PC over a short-lived LAN server and
+  installed with `adb install -r` (same signing key, pairings kept). A contributor on Windows would need a short build
+  directory or a hoisted `node_modules`.
 - **The live privacy policy** says the camera is used only on the QR screen, which is out of date now that the camera
   can be sent to the PC; a replacement paragraph is in `docs/store/google.md`.
 
 ## 8. Not tested
 
-Latency from camera to a picture on the PC; a decoder on the PC and anything shown through it; a virtual camera; a run
-longer than two minutes and the phones' temperature; 60 fps on Android; the front camera at the higher modes; a
+Latency from camera to a picture on the PC; a decoder in the PC program itself (the browser page decodes); a virtual
+camera of our own (OBS's was tried, section 7); a run longer than two minutes and the phones' temperature; 60 fps on Android; the front camera at the higher modes; a
 locked screen; other iPhones and other Android phones (hardware coders vary); dark scenes; distance, 2.4 GHz and
 other Wi-Fi; Wi-Fi capacity as such (the link test of protocol 8.8 is not built); Android on Android 14 or newer.
 Of the native send path (section 3.1): its processor load and heat, its latency, the iPhone's H.264 orientation flags,
-a repeat of the iPhone's H.264 480p60 run (46.4 fps and a 1.75 s freeze, once), the front camera's frame rate, and
-that the rotation values really make the picture upright on a screen.
+a repeat of the iPhone's H.264 480p60 run (46.4 fps and a 1.75 s freeze, once), the front camera's frame rate, the
+slow second seen while the iPhone was being turned (about 17 fps, 1.8 s to a key frame), the phone held upside down, and
+the Android front camera held across.
 
 ## 9. Options for what next (not decided)
 
