@@ -62,8 +62,49 @@ export const modesFor = (
   return modes
 }
 
-/** The mode to start with: 720p at 30 if offered, else the largest the phone offers. */
-export const pickMode = (modes: ReadonlyArray<VideoMode>): VideoMode | null =>
-  modes.find((m) => m.height === 720 && m.fps === 30) ??
-  [...modes].sort((a, b) => b.width * b.height - a.width * a.height || b.fps - a.fps)[0] ??
-  null
+/**
+ * The mode picked with the mode button of the camera section, and the modes offered when it was last asked. The
+ * choice is made on this phone only and lasts until the app closes; until a mode is picked the default is used.
+ */
+export const modeChoice: {
+  picked: VideoMode | null
+  offered: ReadonlyArray<VideoMode>
+  current: VideoMode | null
+} = { picked: null, offered: [], current: null }
+
+/** The offered modes in the order the mode button steps through them: smallest first, h264 before jpeg. */
+const stepOrder = (a: VideoMode, b: VideoMode) =>
+  a.height - b.height || a.fps - b.fps || a.codec.localeCompare(b.codec)
+
+const sameMode = (a: VideoMode, b: VideoMode) =>
+  a.codec === b.codec && a.height === b.height && a.fps === b.fps
+
+/** The mode to start with: the one picked with the mode button, else 720p at 30 if offered, else the largest. */
+export const pickMode = (modes: ReadonlyArray<VideoMode>): VideoMode | null => {
+  modeChoice.offered = [...modes].sort(stepOrder)
+  const picked = modeChoice.picked
+  const chosen = picked === null ? undefined : modes.find((m) => sameMode(m, picked))
+  const mode =
+    chosen ??
+    modes.find((m) => m.height === 720 && m.fps === 30) ??
+    [...modes].sort((a, b) => b.width * b.height - a.width * a.height || b.fps - a.fps)[0] ??
+    null
+  modeChoice.current = mode
+  return mode
+}
+
+/** Makes the next offered mode the one to use (after the last comes the first). */
+export const pickNextMode = () => {
+  const { offered, current } = modeChoice
+  if (offered.length === 0) return
+  const at = current === null ? -1 : offered.findIndex((m) => sameMode(m, current))
+  modeChoice.picked = offered[(at + 1) % offered.length] ?? null
+}
+
+/** What the mode button says: the mode in use and its place among the ones offered. */
+export const modeButtonLabel = (): string => {
+  const { offered, current } = modeChoice
+  if (current === null || offered.length === 0) return "Mode"
+  const at = offered.findIndex((m) => sameMode(m, current)) + 1
+  return `Mode: ${current.codec} ${modeName(current)} (${at} of ${offered.length}), tap for the next`
+}

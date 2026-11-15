@@ -33,15 +33,15 @@ a second?
 
 ## 2. What the app does now (state of `main`)
 
-| Area             | State                                                                                                                                                                |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default mode     | JPEG 720p30, on both platforms (the gate `CODEC_TRIED` in `mobile/src/core/videoModes.ts` offers JPEG up to 720p30)                                                  |
-| H.264            | iOS and Android code it in hardware and offer it in `modes` up to 4K at 60; it is picked only by a test build (a temporary "Next mode" button that is not in `main`) |
-| PC side          | accepts `jpeg` and `h264`, shows JPEG as MJPEG at `/video.mjpg` and `/video`, passes H.264 on as a raw Annex B stream at `/video.h264`; it does not decode H.264     |
-| Window           | 3 frames and 2 MB in flight (it was 2 frames and 256 KB)                                                                                                             |
-| Coder pipeline   | 2 pictures asked for ahead, for H.264 only                                                                                                                           |
-| Native send path | in `main` since 2026-11-12, on both platforms (section 3.1): frames are sealed and sent natively                                                                     |
-| Not built        | a decoder on the PC, a virtual camera, the link test of protocol 8.8, the subscription, a mode picker, thermal-aware mode changes                                    |
+| Area             | State                                                                                                                                                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default mode     | JPEG 720p30, on both platforms (the gate `CODEC_TRIED` in `mobile/src/core/videoModes.ts` offers JPEG up to 720p30)                                                                                                                             |
+| H.264            | iOS and Android code it in hardware and offer it in `modes` up to 4K at 60; it is picked with the mode button of the camera section ("Mode: h264 480p30 (1 of n), tap for the next", in `main` since 2026-11-15); the default stays JPEG 720p30 |
+| PC side          | accepts `jpeg` and `h264`, shows JPEG as MJPEG at `/video.mjpg` and `/video`, passes H.264 on as a raw Annex B stream at `/video.h264`; it does not decode H.264                                                                                |
+| Window           | 3 frames and 2 MB in flight (it was 2 frames and 256 KB)                                                                                                                                                                                        |
+| Coder pipeline   | 2 pictures asked for ahead, for H.264 only                                                                                                                                                                                                      |
+| Native send path | in `main` since 2026-11-12, on both platforms (section 3.1): frames are sealed and sent natively                                                                                                                                                |
+| Not built        | a decoder on the PC, a virtual camera, the link test of protocol 8.8, the subscription, a mode picker, thermal-aware mode changes                                                                                                               |
 
 Changes made because of the measurements, in order:
 

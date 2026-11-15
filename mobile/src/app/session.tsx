@@ -3,6 +3,7 @@ import { useKeepAwake } from "expo-keep-awake"
 import { useRouter } from "expo-router"
 import { Platform } from "react-native"
 import { Session, type SessionState, type StreamStatus, type VideoStatus } from "../core/session"
+import { modeButtonLabel, pickNextMode } from "../core/videoModes"
 import { act, BRAND, useColors, useSessionState } from "../ui/hooks"
 
 export default function SessionScreen() {
@@ -156,6 +157,16 @@ function connectedSections(
               onPress={() => act(Session.use((s) => s.setCamera("front")))}
             />
           </Row>
+        ) : null}
+        {state.video.on ? (
+          <Button
+            variant="outlined"
+            label={modeButtonLabel()}
+            onPress={() => {
+              pickNextMode()
+              act(Session.use((s) => s.setCamera(state.video.camera)))
+            }}
+          />
         ) : null}
       </FieldGroup.Section>
 
