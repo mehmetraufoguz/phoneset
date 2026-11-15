@@ -272,6 +272,10 @@ first frame of a stream is a key frame and one is made at least every 2 seconds.
 ones before it, so a sender never drops a frame after it was coded (it drops before coding, 8.4), and a
 receiver that missed one waits for the next key frame. This payload is defined for measuring (8.7); the PC
 passes it on unchanged and does not decode it.
+A phone follows how it is held (the app's own screen stays in portrait): turning it from upright to across turns the
+picture from portrait to landscape, so `width` and `height` of one record can differ from the one before. A reader
+decodes each record by its own header. An `h264` coder that starts over for the new size sends a key frame with its
+new SPS and PPS first.
 `width` and `height` are the size of the coded picture. A phone that has rotated the picture itself sends
 rotation 0 (a JPEG always is upright, as is an iPhone's `h264`). An Android phone's `h264` frames are in the
 camera's own orientation and say in `flags` how far to turn them; a receiver that ignores the bits shows them
