@@ -18,7 +18,7 @@ import {
   type VideoServerMessage
 } from "./protocol"
 import { SocketFactory } from "./socket"
-import { modesFor, pickMode } from "./videoModes"
+import { modesFor, pickMode, type VideoPrefs } from "./videoModes"
 
 // Everything about sending the phone's camera lives here and in core/camera.ts. Video has a connection
 // of its own (docs/protocol.md, section 8), so none of this touches the audio connection, and a phone
@@ -34,6 +34,10 @@ export interface VideoReport {
   readonly sendMs: number | null
   readonly viewers: number
   readonly camera: CameraStats | null
+  /** The mode in use, every mode this phone and PC offer (for the pickers), and whether the mode is not what was asked for. */
+  readonly mode: VideoMode
+  readonly offered: ReadonlyArray<VideoMode>
+  readonly adjusted: boolean
 }
 
 export interface VideoTarget {
@@ -44,6 +48,8 @@ export interface VideoTarget {
   readonly facing: Facing
   /** The codecs the PC accepts (`ready.video.codecs`). */
   readonly codecs: ReadonlyArray<string>
+  /** The size and frame rate the user asked for. */
+  readonly prefs: VideoPrefs
 }
 
 /**
@@ -154,11 +160,13 @@ export const runVideo = Effect.fn("Video.run")(function* (
     caps,
     target.codecs.filter((codec) => camera.codecs.includes(codec))
   )
-  const mode = pickMode(modes)
-  if (mode === null)
+  const picked = pickMode(modes, target.prefs)
+  if (picked === null)
     return yield* new CameraError({
       message: `This camera has no mode this PC can receive (it takes: ${target.codecs.join(", ")}).`
     })
+  const { mode } = picked
+  const shown = { mode, offered: modes, adjusted: picked.adjusted }
 
   const session: CameraSession = yield* camera.open(target.facing, mode)
   yield* send({
@@ -170,7 +178,7 @@ export const runVideo = Effect.fn("Video.run")(function* (
     // The native pipe makes a key frame when the PC asks for one; the JavaScript path cannot.
     ...(nativePipe !== null && channel.handover !== undefined ? { features: ["keyreq"] } : {})
   })
-  yield* report({ fps: 0, kBps: 0, ackMs: null, sendMs: null, viewers: 0, camera: null }) // the camera is on
+  yield* report({ fps: 0, kBps: 0, ackMs: null, sendMs: null, viewers: 0, camera: null, ...shown }) // the camera is on
 
   const window = new Window()
   let viewers = 0
@@ -265,7 +273,8 @@ export const runVideo = Effect.fn("Video.run")(function* (
             ackMs: acks === 0 ? null : ackTotal / acks,
             sendMs: sends === 0 ? null : sendTotal / sends,
             viewers,
-            camera: stats
+            camera: stats,
+            ...shown
           })
           sentFrames = sentBytes = ackTotal = acks = sendTotal = sends = 0
           since = now
@@ -299,7 +308,8 @@ export const runVideo = Effect.fn("Video.run")(function* (
               ackMs: n.acks === 0 ? null : (n.ackSeconds / n.acks) * 1000,
               sendMs: n.sends === 0 ? null : (n.sendSeconds / n.sends) * 1000,
               viewers,
-              camera: stats
+              camera: stats,
+              ...shown
             })
             since = now
           })

@@ -38,6 +38,7 @@ import {
 import { SocketFactory } from "./socket"
 import { type PairedPc, PairedPcs, type PhoneIdentity } from "./storage"
 import { runVideo, type VideoReport } from "./videoChannel"
+import { DEFAULT_PREFS } from "./videoModes"
 
 export interface StreamStatus {
   readonly on: boolean
@@ -60,6 +61,9 @@ export interface VideoStatus {
   /** Why the camera can't be used here (the PC has no video, this phone can't send it), or null. */
   readonly unavailable: string | null
   readonly camera: Facing
+  /** What the user asked for: the picture's height, and the frame rate. Kept while the camera is off. */
+  readonly quality: number
+  readonly rate: number
   readonly error: string | null
   readonly report: VideoReport | null
 }
@@ -101,6 +105,9 @@ interface StreamRequest {
   /** Handled by the video connection, never sent on this one. */
   readonly video?: boolean
   readonly camera?: Facing
+  /** The size (the picture's height) and the frame rate asked for. */
+  readonly quality?: number
+  readonly rate?: number
 }
 
 interface Route {
@@ -113,7 +120,9 @@ const nothingOn: Required<StreamRequest> = {
   mic: false,
   speaker: false,
   video: false,
-  camera: "back"
+  camera: "back",
+  quality: DEFAULT_PREFS.height,
+  rate: DEFAULT_PREFS.fps
 }
 
 const MAX_RECONNECTS = 6
@@ -140,6 +149,9 @@ export class Session extends Context.Service<
     readonly setVideo: (on: boolean) => Effect.Effect<void>
     /** Picks the camera; while the camera is on it switches. */
     readonly setCamera: (facing: Facing) => Effect.Effect<void>
+    /** Picks the size (the picture's height) and the frame rate; while the camera is on it starts again with them. */
+    readonly setQuality: (height: number) => Effect.Effect<void>
+    readonly setRate: (fps: number) => Effect.Effect<void>
     /** Running streams are stopped and started again so the audio session can take the new mode. */
     readonly setVoiceProcessing: (on: boolean) => Effect.Effect<void>
   }
@@ -356,6 +368,8 @@ function makeSession() {
             busy: false,
             unavailable: unavailableVideo(ready.video),
             camera: (yield* Ref.get(desired)).camera,
+            quality: (yield* Ref.get(desired)).quality,
+            rate: (yield* Ref.get(desired)).rate,
             error: null,
             report: null
           },
@@ -446,6 +460,7 @@ function makeSession() {
 
         const videoRun = (facing: Facing) =>
           Effect.gen(function* () {
+            const wanted = yield* Ref.get(desired)
             const token = yield* Effect.try({
               try: () => fromBase64(pc.token),
               catch: () =>
@@ -458,7 +473,8 @@ function makeSession() {
                   deviceId: me.deviceId,
                   token,
                   facing,
-                  codecs: ready.video?.codecs ?? ["jpeg"]
+                  codecs: ready.video?.codecs ?? ["jpeg"],
+                  prefs: { height: wanted.quality, fps: wanted.rate }
                 },
                 (report) => setVideoStatus({ on: true, busy: false, report })
               )
@@ -496,9 +512,15 @@ function makeSession() {
           Effect.gen(function* () {
             const d = yield* Ref.get(desired)
             if (req.video === false) return yield* stopVideo
-            if (d.video && (req.video === true || req.camera !== undefined))
-              return yield* startVideo(d.camera)
-            if (req.camera !== undefined) yield* setVideoStatus({ camera: req.camera })
+            // What the user picked is shown at once, also while the camera is off.
+            yield* setVideoStatus({
+              ...(req.camera !== undefined ? { camera: req.camera } : {}),
+              ...(req.quality !== undefined ? { quality: req.quality } : {}),
+              ...(req.rate !== undefined ? { rate: req.rate } : {})
+            })
+            const changed =
+              req.camera !== undefined || req.quality !== undefined || req.rate !== undefined
+            if (d.video && (req.video === true || changed)) return yield* startVideo(d.camera)
           })
 
         const handle = (m: ServerMessage) => {
@@ -518,11 +540,18 @@ function makeSession() {
 
         const request = (all: StreamRequest) =>
           Effect.gen(function* () {
-            const { video, camera: facing, ...req } = all
-            if (video !== undefined || facing !== undefined)
+            const { video, camera: facing, quality, rate, ...req } = all
+            if (
+              video !== undefined ||
+              facing !== undefined ||
+              quality !== undefined ||
+              rate !== undefined
+            )
               yield* videoRequest({
                 ...(video !== undefined ? { video } : {}),
-                ...(facing !== undefined ? { camera: facing } : {})
+                ...(facing !== undefined ? { camera: facing } : {}),
+                ...(quality !== undefined ? { quality } : {}),
+                ...(rate !== undefined ? { rate } : {})
               })
             if (req.mic === undefined && req.speaker === undefined) return
             if (req.mic !== undefined) {
@@ -697,6 +726,8 @@ function makeSession() {
       setSpeaker: (on) => request({ speaker: on }).pipe(Effect.asVoid),
       setVideo: (on) => request({ video: on }).pipe(Effect.asVoid),
       setCamera: (facing) => request({ camera: facing }).pipe(Effect.asVoid),
+      setQuality: (height) => request({ quality: height }).pipe(Effect.asVoid),
+      setRate: (fps) => request({ rate: fps }).pipe(Effect.asVoid),
       setVoiceProcessing: (on) =>
         Effect.gen(function* () {
           yield* Ref.set(voiceProcessing, on)

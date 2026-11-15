@@ -62,49 +62,63 @@ export const modesFor = (
   return modes
 }
 
+/** What the user asked the camera for: a size (the picture's height) and a frame rate. */
+export interface VideoPrefs {
+  readonly height: number
+  readonly fps: number
+}
+
+/** 720p at 30 frames a second: what is sent until the user picks something else. */
+export const DEFAULT_PREFS: VideoPrefs = { height: 720, fps: 30 }
+
+/** The mode to use, and whether it is not what was asked for (the phone or the PC does not offer that). */
+export interface PickedMode {
+  readonly mode: VideoMode
+  readonly adjusted: boolean
+}
+
+/** One size of the picker: its height, its name and the highest rate offered at it. */
+export interface TierOffer {
+  readonly height: number
+  readonly name: string
+  readonly maxFps: number
+}
+
+/** The sizes the offered modes cover, smallest first, each with the highest frame rate offered at it. */
+export const tiersOffered = (modes: ReadonlyArray<VideoMode>): ReadonlyArray<TierOffer> =>
+  TIERS.flatMap((tier) => {
+    const at = modes.filter((m) => m.height === tier.height)
+    return at.length === 0
+      ? []
+      : [{ height: tier.height, name: tier.name, maxFps: Math.max(...at.map((m) => m.fps)) }]
+  })
+
+/** Prefers JPEG where both are offered (the PC's MJPEG address keeps working), else the first. */
+const preferJpeg = (modes: ReadonlyArray<VideoMode>): VideoMode | null =>
+  modes.find((m) => m.codec === "jpeg") ?? modes[0] ?? null
+
 /**
- * The mode picked with the mode button of the camera section, and the modes offered when it was last asked. The
- * choice is made on this phone only and lasts until the app closes; until a mode is picked the default is used.
+ * The mode for what was asked: that size at that rate. Where the phone or the PC does not offer it, the nearest:
+ * the same size at the closest rate, else the closest size (smaller first on a tie) at the closest rate.
  */
-export const modeChoice: {
-  picked: VideoMode | null
-  offered: ReadonlyArray<VideoMode>
-  current: VideoMode | null
-} = { picked: null, offered: [], current: null }
-
-/** The offered modes in the order the mode button steps through them: smallest first, h264 before jpeg. */
-const stepOrder = (a: VideoMode, b: VideoMode) =>
-  a.height - b.height || a.fps - b.fps || a.codec.localeCompare(b.codec)
-
-const sameMode = (a: VideoMode, b: VideoMode) =>
-  a.codec === b.codec && a.height === b.height && a.fps === b.fps
-
-/** The mode to start with: the one picked with the mode button, else 720p at 30 if offered, else the largest. */
-export const pickMode = (modes: ReadonlyArray<VideoMode>): VideoMode | null => {
-  modeChoice.offered = [...modes].sort(stepOrder)
-  const picked = modeChoice.picked
-  const chosen = picked === null ? undefined : modes.find((m) => sameMode(m, picked))
-  const mode =
-    chosen ??
-    modes.find((m) => m.height === 720 && m.fps === 30) ??
-    [...modes].sort((a, b) => b.width * b.height - a.width * a.height || b.fps - a.fps)[0] ??
-    null
-  modeChoice.current = mode
-  return mode
-}
-
-/** Makes the next offered mode the one to use (after the last comes the first). */
-export const pickNextMode = () => {
-  const { offered, current } = modeChoice
-  if (offered.length === 0) return
-  const at = current === null ? -1 : offered.findIndex((m) => sameMode(m, current))
-  modeChoice.picked = offered[(at + 1) % offered.length] ?? null
-}
-
-/** What the mode button says: the mode in use and its place among the ones offered. */
-export const modeButtonLabel = (): string => {
-  const { offered, current } = modeChoice
-  if (current === null || offered.length === 0) return "Mode"
-  const at = offered.findIndex((m) => sameMode(m, current)) + 1
-  return `Mode: ${current.codec} ${modeName(current)} (${at} of ${offered.length}), tap for the next`
+export const pickMode = (
+  modes: ReadonlyArray<VideoMode>,
+  prefs: VideoPrefs = DEFAULT_PREFS
+): PickedMode | null => {
+  const closest = (candidates: ReadonlyArray<VideoMode>, by: (m: VideoMode) => number) => {
+    const best = Math.min(...candidates.map(by))
+    return candidates.filter((m) => by(m) === best)
+  }
+  if (modes.length === 0) return null
+  const exact = modes.filter((m) => m.height === prefs.height && m.fps === prefs.fps)
+  const exactMode = preferJpeg(exact)
+  if (exactMode !== null) return { mode: exactMode, adjusted: false }
+  // The nearest size first, then the nearest rate at it (a lower rate before a higher one).
+  const sizes = closest(
+    modes,
+    (m) => Math.abs(m.height - prefs.height) * 2 + (m.height > prefs.height ? 1 : 0)
+  )
+  const rates = closest(sizes, (m) => Math.abs(m.fps - prefs.fps) * 2 + (m.fps > prefs.fps ? 1 : 0))
+  const mode = preferJpeg(rates)
+  return mode === null ? null : { mode, adjusted: true }
 }
