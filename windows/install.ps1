@@ -3,8 +3,9 @@
 #   windows\install.ps1 [-Dll <path to softcam.dll>]
 #
 # Registering writes to HKLM, so this asks for administrator rights (the UAC window). The DLL is copied to
-# "C:\Program Files\phoneset\camera": a place that every process may read. That matters: Chrome and Edge read the
-# camera in a sandboxed process and leave the camera out of their list when the DLL sits in a user folder.
+# "C:\Program Files\phoneset\camera": a place that every process may read, where a program belongs. (With the DLL in a
+# user folder Chrome and Edge did not offer the camera; whether the folder or a missing browser restart was the cause
+# was not tested, see README.md.)
 param([string]$Dll = (Join-Path $PSScriptRoot 'dist\softcam.dll'))
 $ErrorActionPreference = 'Stop'
 $log = Join-Path $env:TEMP 'phoneset-camera-install.log'

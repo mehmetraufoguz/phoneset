@@ -22,7 +22,13 @@ try {
         # regsvr32 is a Windows (not console) program: Start-Process is what waits for it and gives its exit code.
         $reg = Start-Process regsvr32.exe -ArgumentList '/u', '/s', "`"$dll`"" -Wait -PassThru
         if ($reg.ExitCode -ne 0) { throw "regsvr32 /u failed with $($reg.ExitCode)" }
-        Remove-Item $dest -Recurse -Force
+        try {
+            Remove-Item $dest -Recurse -Force
+        } catch {
+            # A browser's camera process keeps a DLL it has used loaded; the registration is gone already.
+            $holders = (& tasklist.exe /m softcam.dll | Select-String 'softcam' | ForEach-Object { ($_ -split '\s+')[0] }) -join ', '
+            throw "The camera is unregistered, but $dll is still loaded by: $holders. Close it (a browser that used the camera) and run uninstall.ps1 again."
+        }
     }
     # The parent folder goes only when nothing else is in it.
     $parent = Split-Path $dest

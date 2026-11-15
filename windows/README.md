@@ -28,15 +28,21 @@ installation. `install.ps1` and `uninstall.ps1` ask for administrator rights the
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | ffmpeg (`-f dshow -i video="phoneset Camera"`)        | the camera is listed and delivers frames (the balls move)                                                               |
 | OBS Studio 33.0.1, "Video Capture Device"             | shows the picture                                                                                                       |
-| Chrome 157 and Edge 157 (a web camera test page)      | listed and shows the picture, **only when the DLL is in a folder every process may read** (see below)                   |
+| Chrome 157 and Edge 157 (a web camera test page)      | listed and shows the picture once the DLL was in `C:\Program Files\phoneset\camera` and the browsers were restarted    |
 | Windows Camera app, Zoom, Teams                       | not tried: not installed on this PC                                                                                     |
 
-**The folder matters.** With the DLL in a user folder (under `AppData`), `chrome://settings/content/camera` listed
-"phoneset Camera" but the page's camera picker did not offer it ("Use available cameras (3)" with two names in the
-list). Chrome and Edge read cameras in a sandboxed process that cannot load a DLL from there. From
-`C:\Program Files\phoneset\camera`, which grants read to `ALL APPLICATION PACKAGES` and `ALL RESTRICTED APPLICATION
-PACKAGES` by inheritance, both browsers list the camera and show the picture. A browser that was open when the camera
-was registered has to be closed and opened again.
+**Folder or restart: not told apart.** With the DLL in a user folder (under `AppData`) and Chrome and Edge already
+open, `chrome://settings/content/camera` listed "phoneset Camera" but the page's camera picker did not offer it ("Use
+available cameras (3)" with two names in the list). After the DLL was moved to `C:\Program Files\phoneset\camera`,
+registered again, and both browsers were closed and opened again, both listed the camera and showed the picture. Two
+things changed at once (the folder and the restart), so which of them made the difference was **not tested**. A
+sandbox that cannot read a user folder is only a guess, and a weak one: Chrome's camera process here runs with
+`--service-sandbox-type=none`. Installing under Program Files is the right place for a product anyway, and a browser
+that was open when the camera was registered has to be closed and opened again to be safe.
+
+**A DLL in use.** Chrome's camera process (`video_capture.mojom.VideoCaptureService`) keeps `softcam.dll` loaded after
+a test page used the camera, so removing the file fails ("access denied") even after the registration is gone.
+`uninstall.ps1` says which program holds it; closing that program (or the browser) and running it again finishes.
 
 **Gotchas met on the way.** `regsvr32.exe` is a Windows program, not a console one: PowerShell does not wait for it and
 leaves `$LASTEXITCODE` empty, so the scripts start it with `Start-Process -Wait -PassThru`. `softcam.vcxproj` built on
