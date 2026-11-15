@@ -55,8 +55,52 @@ jobs:
           name: phoneset-windows-${{ matrix.arch }}
           path: phoneset-windows-${{ matrix.arch }}.zip
 
+  macos-camera:
+    # The virtual camera for macOS ("phoneset Camera.app"). It has to be signed with a Developer ID certificate and
+    # notarized by Apple, which needs secrets only the owner can create (macos/README.md, "Releasing"). Until they
+    # are set the repository variable MACOS_CAMERA is not "true", this job is skipped and the release is made
+    # without the camera app (`phoneset camera install` then says so).
+    if: ${{ vars.MACOS_CAMERA == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install xcodegen
+      - name: Import the signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          rm "$RUNNER_TEMP/cert.p12"
+      - name: Build, sign, notarize
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          export ASC_KEY_PATH ASC_KEY_ID ASC_ISSUER_ID
+          macos/release.sh --version "${GITHUB_REF_NAME#v}" --out "$GITHUB_WORKSPACE/camera-dist"
+          rm "$ASC_KEY_PATH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phoneset-camera-macos
+          path: camera-dist/phoneset-camera-macos.zip
+
   publish:
-    needs: [macos, windows]
+    needs: [macos, windows, macos-camera]
+    # The camera job may be skipped (no signing set up); the others must have worked.
+    if: ${{ !cancelled() && needs.macos.result == 'success' && needs.windows.result == 'success' && contains(fromJSON('["success","skipped"]'), needs['macos-camera'].result) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

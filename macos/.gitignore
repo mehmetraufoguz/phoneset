@@ -5,3 +5,4 @@ App/PhonesetCamera.entitlements
 Extension/Info.plist
 Extension/Extension.entitlements
 build/
+release/

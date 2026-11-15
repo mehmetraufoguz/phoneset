@@ -30,3 +30,23 @@ What the app does is logged under the subsystem `com.rapp.phoneset.camera` (the 
 ```sh
 /usr/bin/log show --last 1m --info --debug --predicate 'subsystem BEGINSWITH "com.rapp.phoneset.camera"'
 ```
+
+## Releasing (signed and notarized)
+
+`phoneset camera install` downloads `phoneset-camera-macos.zip` from the latest GitHub release when the app is not
+next to the program or in /Applications. That file has to be signed with a Developer ID certificate and notarized by
+Apple; `macos/release.sh` makes it (archive, export with `ExportOptions.plist`, notarize, staple, zip, checksum).
+
+Only the owner can create what it needs:
+
+1. A **Developer ID Application** certificate (Xcode, Settings, Accounts, Manage Certificates, +).
+2. On developer.apple.com, the **System Extension** capability on the identifier `com.rapp.phoneset.camera`.
+3. Notarization credentials: an App Store Connect API key (.p8, key id, issuer id), or a profile made once with
+   `xcrun notarytool store-credentials` (then `NOTARY_PROFILE=<name>`).
+
+Try it by hand first: `macos/release.sh --no-notarize` (signs only), then the full run. For CI set the repository
+variable `MACOS_CAMERA=true` and the secrets `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `ASC_KEY_ID`,
+`ASC_ISSUER_ID`, `ASC_KEY_P8`; until then the release job skips the camera and the release has no camera app.
+
+Not verified yet: a real signing and notarization run (no Developer ID certificate on the development Mac), and
+the download path against a real release.
