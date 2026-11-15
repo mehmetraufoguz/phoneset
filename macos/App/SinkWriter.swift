@@ -22,7 +22,7 @@ final class SinkWriter {
   func open() -> Bool {
     if isOpen { return true }
     guard let device = Self.findDevice(uid: Self.deviceUID) else {
-      log.debug("the camera is not in the list of devices")
+      log.info("the camera is not in the list of devices")
       return false
     }
     let streams = Self.streams(of: device)

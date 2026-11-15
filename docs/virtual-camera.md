@@ -43,6 +43,24 @@ not be sandboxed (same thread); the extension is.
 The agent does not change. Nothing but the companion app reads `/video.frames` for this, and the token stays in the
 user's own configuration directory.
 
+## 2a. One place to control it, on every system
+
+The phoneset program is where the camera is controlled from, whatever the system: `phoneset camera status | install |
+uninstall`, the camera line of `phoneset status`, and a camera section in the tray menu (status line, install and
+remove) all go through the package `pc/internal/camera` and the control API (`GET /api/camera`, `POST
+/api/camera/install`, `/uninstall`, and `POST /api/camera/report`, where the part that carries the picture says what it
+is doing). A system provides a `Backend` (probe, install, uninstall, start) and nothing else is system specific.
+
+| System  | Backend                                                                                                                                                                                                                                                                                                   | State                                                                                                                                                                                                                                  |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | `phoneset Camera.app` in `/Applications` (a camera extension and a helper without a window); the program starts it when a phone begins to send video                                                                                                                                                      | works; `phoneset camera install` puts it in place and asks macOS to turn it on, then the user allows it once in System Settings                                                                                                        |
+| Windows | none of its own yet; `phoneset camera` says to use OBS Studio's Virtual Camera                                                                                                                                                                                                                            | OBS bridge works. Own camera: a DirectShow filter on Windows 10, `MFCreateVirtualCamera` on Windows 11 (build 22000 and newer), each a native component that reads `/video.frames`, behind the same commands and the same tray section |
+| Linux   | none yet; the plan is v4l2loopback (a kernel module that makes `/dev/videoN`) fed by the program through `ffmpeg` (reading `/video.h264` or `/video.mjpg`, turning it upright with the record's rotation, writing to the device); `install` would check for the module and ffmpeg and say what is missing | not built and not tried: no Linux machine to test on                                                                                                                                                                                   |
+
+The macOS app is only a helper: its window is gone (it has none), it is started with `--background`, `--install` or
+`--uninstall`, and opened by hand it says where the camera is controlled from. After an install it starts itself again,
+because an app that was open while macOS replaced the extension keeps an out-of-date view of the cameras.
+
 ## 3. What has to be true to build and ship it
 
 | Need                                                                                                                                                                                          | State                                                                                                                                                                                                                                                  |

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// One record of the agent's `/video.frames` stream (docs/protocol.md, section 9).
 struct FrameRecord {
@@ -28,6 +29,7 @@ final class AgentLink: NSObject, URLSessionDataDelegate {
   var onFrame: ((FrameRecord) -> Void)?
 
   private let queue = DispatchQueue(label: "phoneset.agentlink")
+  private let log = Logger(subsystem: "com.rapp.phoneset.camera", category: "link")
   private var session: URLSession!
   private var task: URLSessionDataTask?
   private var buffer = Data()
@@ -56,31 +58,24 @@ final class AgentLink: NSObject, URLSessionDataDelegate {
     }
   }
 
-  /// Where the program keeps control.json: the folder in the `agentConfigDir` setting (for a test program started
-  /// with --config-dir), else the program's own folder.
-  private static func controlURL() -> URL {
-    if let dir = UserDefaults.standard.string(forKey: "agentConfigDir"), !dir.isEmpty {
-      return URL(fileURLWithPath: dir).appendingPathComponent("control.json")
-    }
-    let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    return support.appendingPathComponent("phoneset").appendingPathComponent("control.json")
-  }
-
   private func connect() {
     guard running else { return }
-    guard
-      let data = try? Data(contentsOf: Self.controlURL()),
-      let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-      let port = info["port"] as? Int, let token = info["token"] as? String,
-      let url = URL(string: "http://127.0.0.1:\(port)/video.frames?t=\(token)")
-    else {
+    guard let control = AgentControl.read(), let url = control.url("/video.frames") else {
+      log.info("no control.json at \(AgentControl.controlURL().path, privacy: .public)")
       onState?(.noAgent)
       retry()
       return
     }
     buffer = Data()
-    task = session.dataTask(with: URLRequest(url: url))
-    task?.resume()
+    let task = session.dataTask(with: URLRequest(url: url))
+    self.task = task
+    task.resume()
+    // While no phone sends, the program has no body to send yet and macOS holds the response back (it looks at the
+    // first bytes of a body of an unknown type), so the program counts as there once the request has been standing
+    // for a second without an error.
+    queue.asyncAfter(deadline: .now() + 1) { [weak self] in
+      if let self, self.task === task, task.state == .running { self.onState?(.connected) }
+    }
   }
 
   private func retry() {
@@ -94,6 +89,7 @@ final class AgentLink: NSObject, URLSessionDataDelegate {
     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
   ) {
     let ok = (response as? HTTPURLResponse)?.statusCode == 200
+    log.info("frames: status \((response as? HTTPURLResponse)?.statusCode ?? -1, privacy: .public)")
     if ok { onState?(.connected) }
     completionHandler(ok ? .allow : .cancel)
   }
@@ -119,6 +115,7 @@ final class AgentLink: NSObject, URLSessionDataDelegate {
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
     guard running else { return }
+    log.info("frames: ended, \(error?.localizedDescription ?? "no error", privacy: .public)")
     onState?(.noAgent)
     retry()
   }

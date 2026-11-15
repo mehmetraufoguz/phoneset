@@ -26,6 +26,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMinimumSystemVersion: "13.0"
         LSApplicationCategoryType: public.app-category.utilities
+        LSUIElement: true
         NSCameraUsageDescription: phoneset Camera sends the picture of your phone to programs that use a camera.
     entitlements:
       path: App/PhonesetCamera.entitlements

@@ -133,13 +133,13 @@ final class Bridge: ObservableObject {
     let text: String
     var flowing = false
     if !sink.isOpen {
-      text = "The camera isn't installed yet: press Install camera."
+      text = "waiting for the camera to be switched on"
     } else if !agentUp {
-      text = "The phoneset program isn't running on this Mac."
+      text = "waiting for the phoneset program"
     } else if Date().timeIntervalSince(lastFrameAt) > 1.5 {
-      text = "Waiting for your phone to turn its camera on."
+      text = "waiting for your phone to turn its camera on"
     } else {
-      text = "Sending your phone's picture: \(lastDescription), \(Int(fps.rounded())) frames a second."
+      text = "sending your phone's picture: \(lastDescription), \(Int(fps.rounded())) frames a second"
       flowing = true
     }
     DispatchQueue.main.async {
