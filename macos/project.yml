@@ -22,6 +22,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: phoneset Camera
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMinimumSystemVersion: "13.0"
         LSApplicationCategoryType: public.app-category.utilities
         NSCameraUsageDescription: phoneset Camera sends the picture of your phone to programs that use a camera.
@@ -51,6 +53,8 @@ targets:
       properties:
         CFBundleDisplayName: phoneset Camera
         CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMinimumSystemVersion: "13.0"
         NSSystemExtensionUsageDescription: phoneset Camera shows the picture of your phone as a camera.
         CMIOExtension:

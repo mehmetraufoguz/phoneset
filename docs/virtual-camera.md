@@ -1,6 +1,6 @@
 # A virtual camera of our own: plan
 
-Status: phase 0 is built and works on the developer's Mac (section 4); the rest is a plan. Written 2026-11-15, after the camera path from the phone to the PC was
+Status: phases 0 and 1 are built and work on the developer's Mac (section 4); the rest is a plan. Written 2026-11-15, after the camera path from the phone to the PC was
 measured (docs/webcam-measurements.md) and shown to work through OBS Studio's Browser source and Virtual Camera on
 Windows 10. The point of a virtual camera of our own is that Zoom, Meet, Teams, FaceTime and the like list "phoneset
 Camera" without OBS in between.
@@ -79,7 +79,20 @@ Each phase ends with something that can be seen, and the next one starts only wh
    Done when Photo Booth (or QuickTime Player's camera list) on the developer's Mac shows "phoneset Camera" and the
    pattern, after the user has approved the extension in System Settings. This is the gate: if the extension does not
    activate on macOS 26.7 with the Apple Development team, the rest waits for that to be understood.
-1. **The phone's picture.** The app reads `/video.frames`, decodes, turns upright, fits and writes to the sink stream;
+1. **The phone's picture.** _Done 2026-11-15, checked by the user in Photo Booth:_ the iPhone's picture (H.264) arrives
+   upright, smooth, and turns to landscape and fills the frame when the phone is turned. The companion app reads
+   `/video.frames`, decodes (VideoToolbox for H.264, ImageIO for JPEG), turns the picture upright, fits it into
+   1280 x 720 with black bars and writes it to the extension's sink stream; with nothing written the extension shows
+   its own slate. What was learned: the sink stream is the one with stream direction 0 (the source has 1; the order
+   of the two in the device's list also matched); the extension's version number (`CFBundleVersion`) has to grow for
+   macOS to replace an installed extension, so `build.sh` uses the time; a sink opened while the extension is being
+   replaced stays attached to the old one and its queue stays full, so the app now closes and opens the sink again when
+   the queue is full for about two seconds or the camera's stream numbers change; removing the camera and installing
+   it again (or switching it off in System Settings, General, Login Items & Extensions, Camera Extensions) makes
+   programs such as Photo Booth lose the camera and needs the switch to be turned on again there. Not checked: a JPEG
+   camera through the virtual camera, an Android phone, the load on the Mac and the delay from camera to picture, other
+   programs (Zoom, FaceTime, Chrome), the camera in portrait where the frame is not filled (it is shown with bars).
+   The plan for the phase, as written before it was done: The app reads `/video.frames`, decodes, turns upright, fits and writes to the sink stream;
    the slate when nothing comes. Done when the OPPO's and the iPhone's picture, upright, in both orientations and in
    H.264 and JPEG, shows in Photo Booth, and the slate shows when the phone turns the camera off.
 2. **A product.** A menu bar item (status, launch at login, quit), `phoneset camera install | uninstall | status` in

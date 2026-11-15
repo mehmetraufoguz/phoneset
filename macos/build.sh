@@ -1,12 +1,13 @@
 #!/bin/sh
 # Generates the Xcode project, builds phoneset Camera.app (signed with the team in project.yml, Xcode's automatic
-# signing) and puts it in /Applications, where macOS installs a camera extension from.
+# signing) and puts it in /Applications, where macOS installs a camera extension from. The build number is the time:
+# macOS replaces an installed extension only with a newer one.
 # usage: macos/build.sh [--no-install]
 set -e
 cd "$(dirname "$0")"
 xcodegen generate
 xcodebuild -project PhonesetCamera.xcodeproj -scheme PhonesetCamera -configuration Debug \
-  -derivedDataPath build -allowProvisioningUpdates build
+  -derivedDataPath build -allowProvisioningUpdates CURRENT_PROJECT_VERSION="$(date +%s)" build
 APP="build/Build/Products/Debug/phoneset Camera.app"
 codesign --verify --deep --strict "$APP" && echo "signature ok"
 if [ "$1" != "--no-install" ]; then

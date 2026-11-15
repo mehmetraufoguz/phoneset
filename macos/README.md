@@ -14,3 +14,16 @@ makes the provisioning profile). macOS only installs a camera extension from an 
 
 `App/` is the companion app, `Extension/` the camera extension (it publishes one device, "phoneset Camera").
 The Xcode project and the plists are generated and not in git.
+
+## Trying a new build
+
+`macos/build.sh` replaces the app and `open -a "phoneset Camera" --args --install` asks macOS to replace the extension
+(its version is the build time). The app finds the phoneset program through `control.json` in
+`~/Library/Application Support/phoneset`, or in the folder set with
+`defaults write com.rapp.phoneset.camera agentConfigDir <folder>` (for a program started with `--config-dir`).
+What the app does is logged under the subsystem `com.rapp.phoneset.camera` (the extension's:
+`com.rapp.phoneset.camera.extension`):
+
+```sh
+/usr/bin/log show --last 1m --info --debug --predicate 'subsystem BEGINSWITH "com.rapp.phoneset.camera"'
+```
