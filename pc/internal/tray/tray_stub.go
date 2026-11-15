@@ -21,9 +21,12 @@ type Actions struct {
 	Forget      func(id string)
 	Quit        func()
 	OpenLog     func()
-	Autostart   system.Autostart
-	Exe         string
-	Update      Updater
+	// The virtual camera: asking to install or remove it.
+	CameraInstall   func()
+	CameraUninstall func()
+	Autostart       system.Autostart
+	Exe             string
+	Update          Updater
 }
 
 func Run(context.Context, *app.App, Actions, func() error) error { return ErrUnavailable }

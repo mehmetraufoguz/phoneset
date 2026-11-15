@@ -22,6 +22,7 @@ Or in the background (tray icon on Windows and macOS):
   phoneset daemon            start in the background, then give the terminal back
   phoneset status            what is running, who is connected
   phoneset video [--open]    where the phone's camera can be seen (--mjpeg: the raw MJPEG address, --h264: the raw h264 address, --frames: frames with their orientation)
+  phoneset camera            the virtual camera "phoneset Camera" (install, uninstall, status)
   phoneset pair              show a pairing QR code and code for the running service
   phoneset stop              stop the background service
   phoneset logs              where the log is, and its last lines
@@ -70,6 +71,8 @@ func main() {
 		err = cmdStatus(args)
 	case "video":
 		err = cmdVideo(args)
+	case "camera":
+		err = cmdCamera(args)
 	case "pair":
 		err = cmdPair(args)
 	case "logs":

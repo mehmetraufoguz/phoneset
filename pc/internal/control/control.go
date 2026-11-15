@@ -23,6 +23,7 @@ import (
 	"github.com/skip2/go-qrcode"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/app"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/camera"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/icons"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/proto"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/store"
@@ -51,6 +52,7 @@ type Handler interface {
 	Disconnect() bool
 	Forget(ref string) ([]store.Device, error)
 	Video() *video.Hub
+	CameraMonitor() *camera.Monitor
 }
 
 // Serve listens on a free loopback port and publishes it until ctx ends.
@@ -80,6 +82,11 @@ func Serve(ctx context.Context, dir, mode string, args []string, h Handler, stop
 	mux.HandleFunc("POST /api/disconnect", s.guard(s.disconnect))
 	mux.HandleFunc("POST /api/forget", s.guard(s.forget))
 	mux.HandleFunc("POST /api/stop", s.guard(s.stopHandler))
+	// The virtual camera: its state, a request to install or remove it, and the report of the part that carries the picture.
+	mux.HandleFunc("GET /api/camera", s.guard(s.cameraState))
+	mux.HandleFunc("POST /api/camera/report", s.guard(s.cameraReport))
+	mux.HandleFunc("POST /api/camera/install", s.guard(s.cameraInstall))
+	mux.HandleFunc("POST /api/camera/uninstall", s.guard(s.cameraUninstall))
 	mux.HandleFunc("GET /pair", s.guard(s.pairPage))
 	mux.HandleFunc("GET /qr.png", s.guard(s.qr))
 	mux.HandleFunc("GET /logo.png", s.guard(func(w http.ResponseWriter, _ *http.Request) {
@@ -351,6 +358,7 @@ func (c *Client) do(method, path string, out any) error {
 func (c *Client) Status() (s app.Snapshot, err error)  { err = c.do("GET", "/api/status", &s); return }
 func (c *Client) Pair() (p app.PairingInfo, err error) { err = c.do("POST", "/api/pair", &p); return }
 func (c *Client) Stop() error                          { return c.do("POST", "/api/stop", nil) }
+func (c *Client) Camera() (s camera.State, err error)  { err = c.do("GET", "/api/camera", &s); return }
 func (c *Client) Disconnect() error                    { return c.do("POST", "/api/disconnect", nil) }
 func (c *Client) Forget(ref string) error {
 	return c.do("POST", "/api/forget?ref="+strings.ReplaceAll(ref, " ", "%20"), nil)

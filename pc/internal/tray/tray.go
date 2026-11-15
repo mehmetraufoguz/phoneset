@@ -13,6 +13,7 @@ import (
 	"fyne.io/systray"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/app"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/camera"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/icons"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/system"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/update"
@@ -34,9 +35,12 @@ type Actions struct {
 	Forget      func(id string)
 	Quit        func()
 	OpenLog     func()
-	Autostart   system.Autostart
-	Exe         string
-	Update      Updater
+	// The virtual camera: asking to install or remove it.
+	CameraInstall   func()
+	CameraUninstall func()
+	Autostart       system.Autostart
+	Exe             string
+	Update          Updater
 }
 
 func icon(connected bool) []byte {
@@ -66,6 +70,16 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 		mic.Disable()
 		speaker := systray.AddMenuItem("", "")
 		speaker.Disable()
+		systray.AddSeparator()
+
+		// The virtual camera: a status line and one action, shown where this system has a camera of our own.
+		cameraLine := systray.AddMenuItem("", "")
+		cameraLine.Disable()
+		cameraLine.Hide()
+		cameraInstall := systray.AddMenuItem("Install the camera…", "Add “phoneset Camera” to the cameras of this PC")
+		cameraInstall.Hide()
+		cameraRemove := systray.AddMenuItem("Remove the camera", "")
+		cameraRemove.Hide()
 		systray.AddSeparator()
 
 		pair := systray.AddMenuItem("Pair a phone…", "Show a QR code to pair a phone")
@@ -115,6 +129,26 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 				mic.Hide()
 				speaker.Hide()
 			}
+			switch s.Camera.Phase {
+			case camera.Unsupported:
+				cameraLine.Hide()
+				cameraInstall.Hide()
+				cameraRemove.Hide()
+			case camera.Ready:
+				line := "Camera “phoneset Camera”: ready"
+				if s.Camera.Running && s.Camera.Line != "" {
+					line = "Camera: " + s.Camera.Line
+				}
+				cameraLine.SetTitle(line)
+				cameraLine.Show()
+				cameraInstall.Hide()
+				cameraRemove.Show()
+			default:
+				cameraLine.SetTitle("Camera: " + string(s.Camera.Phase))
+				cameraLine.Show()
+				cameraInstall.Show()
+				cameraRemove.Show()
+			}
 			for i := range forget {
 				if i < len(s.Phones) {
 					ids[i] = s.Phones[i].ID
@@ -137,6 +171,10 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 				select {
 				case <-pair.ClickedCh:
 					act.OpenPairing()
+				case <-cameraInstall.ClickedCh:
+					act.CameraInstall()
+				case <-cameraRemove.ClickedCh:
+					act.CameraUninstall()
 				case <-disconnect.ClickedCh:
 					act.Disconnect()
 				case <-logItem.ClickedCh:

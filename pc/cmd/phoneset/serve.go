@@ -155,9 +155,19 @@ func cmdServe(args []string) error {
 		Forget:      func(id string) { _, _ = application.Forget(id) },
 		Quit:        stop,
 		OpenLog:     func() { _ = system.OpenFile(logPath) },
-		Autostart:   system.NewAutostart(),
-		Exe:         exe,
-		Update:      trayUpdater(build, mode, ctl.Args, log, stop),
+		CameraInstall: func() {
+			if err := application.Camera.Backend().Install(filepath.Dir(exe)); err != nil {
+				log.Warn("couldn't install the virtual camera", "err", err)
+			}
+		},
+		CameraUninstall: func() {
+			if err := application.Camera.Backend().Uninstall(); err != nil {
+				log.Warn("couldn't remove the virtual camera", "err", err)
+			}
+		},
+		Autostart: system.NewAutostart(),
+		Exe:       exe,
+		Update:    trayUpdater(build, mode, ctl.Args, log, stop),
 	}, work)
 }
 

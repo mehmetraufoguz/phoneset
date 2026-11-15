@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/app"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/camera"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/control"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/system"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/term"
@@ -161,6 +162,13 @@ func printStatus(c *control.Client, s app.Snapshot) {
 	}
 	if len(names) == 0 {
 		names = []string{"none"}
+	}
+	if s.Camera.Phase != camera.Unsupported {
+		line := cameraText(s.Camera)
+		if s.Camera.Phase == camera.Ready && s.Camera.Line != "" {
+			line += term.Dim("  " + s.Camera.Line)
+		}
+		fmt.Printf("  virtual camera   %s\n", line)
 	}
 	fmt.Printf("  paired phones    %s\n", strings.Join(names, ", "))
 	if s.Pairing != nil {

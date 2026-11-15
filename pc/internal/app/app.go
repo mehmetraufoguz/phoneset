@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/audio"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/camera"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/discovery"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/pairing"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/proto"
@@ -48,6 +49,7 @@ type Snapshot struct {
 	Mic     server.StreamInfo `json:"mic"`
 	Speaker server.StreamInfo `json:"speaker"`
 	Video   video.Status      `json:"video"`
+	Camera  camera.State      `json:"camera"`
 	Pairing *PairingInfo      `json:"pairing"`
 	Phones  []PhoneRow        `json:"phones"`
 }
@@ -61,6 +63,8 @@ type App struct {
 	Server  *server.Server
 	Backend audio.Backend
 	Log     *slog.Logger
+	// Camera is the virtual camera ("phoneset Camera"): its state, and the way to install and start it.
+	Camera *camera.Monitor
 
 	// Hooks for a front end (the terminal prints from them). Called after state is updated.
 	OnPaired        func(store.Device)
@@ -68,12 +72,15 @@ type App struct {
 
 	mu        sync.Mutex
 	listeners []func(Snapshot)
+	videoOn   bool
 }
 
 func New(version string, port int, st *store.Store, pm *pairing.Manager, srv *server.Server,
 	be audio.Backend, log *slog.Logger) *App {
-	a := &App{Version: version, Port: port, Store: st, Pairing: pm, Server: srv, Backend: be, Log: log}
+	a := &App{Version: version, Port: port, Store: st, Pairing: pm, Server: srv, Backend: be, Log: log,
+		Camera: camera.NewMonitor(camera.Default())}
 	srv.OnChange(a.notify)
+	a.Camera.OnChange(a.notify)
 	srv.OnPaired = func(d store.Device) {
 		log.Info("paired", "phone", d.Name, "platform", d.Platform)
 		a.notify()
@@ -115,6 +122,7 @@ func (a *App) Snapshot() Snapshot {
 		Mic:     act.Mic,
 		Speaker: act.Speaker,
 		Video:   act.Video,
+		Camera:  a.Camera.State(),
 		Phones:  []PhoneRow{},
 	}
 	if offer, ok := a.Pairing.Current(); ok {
@@ -142,6 +150,9 @@ func (a *App) OpenPairing() (PairingInfo, error) {
 }
 
 func (a *App) Disconnect() bool { return a.Server.Disconnect() }
+
+// CameraMonitor is the virtual camera's state (the control API reads it).
+func (a *App) CameraMonitor() *camera.Monitor { return a.Camera }
 
 // Video is where a phone's camera frames arrive.
 func (a *App) Video() *video.Hub { return a.Server.Video() }
@@ -175,6 +186,7 @@ func (a *App) notify() {
 	a.mu.Lock()
 	fns := append([]func(Snapshot){}, a.listeners...)
 	a.mu.Unlock()
+	a.watchVideo()
 	if len(fns) == 0 {
 		return
 	}
@@ -194,4 +206,20 @@ func (a *App) link(secret []byte) string {
 	return fmt.Sprintf("phoneset://pair?v=%d&id=%s&n=%s&h=%s&p=%d&k=%s",
 		proto.Version, ident.ID, url.QueryEscape(ident.Name), strings.Join(addrs, ","), a.Port,
 		base64.RawURLEncoding.EncodeToString(secret))
+}
+
+// watchVideo starts the part of the virtual camera that carries the picture when a phone begins to send video.
+func (a *App) watchVideo() {
+	on := a.Server.Activity().Video.On
+	a.mu.Lock()
+	began := on && !a.videoOn
+	a.videoOn = on
+	a.mu.Unlock()
+	if began {
+		go func() {
+			if err := a.Camera.Start(); err != nil {
+				a.Log.Warn("couldn't start the virtual camera", "err", err)
+			}
+		}()
+	}
 }
