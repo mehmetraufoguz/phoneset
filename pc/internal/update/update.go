@@ -322,6 +322,33 @@ func (c *Client) Install(ctx context.Context, rel *Release, exe string, log func
 	return replace(exe, staged)
 }
 
+// Fetch downloads the asset called name of rel into dir and checks it against the release's SHA256SUMS. A release
+// that has no SHA256SUMS at all is taken as it is, but one that has it and can't be checked against it is refused (a
+// failed download of the sums is not a reason to trust the file). It returns the path of the file.
+func (c *Client) Fetch(ctx context.Context, rel *Release, name, dir string, log func(string)) (string, error) {
+	if log == nil {
+		log = func(string) {}
+	}
+	log("downloading " + name)
+	file, err := c.download(ctx, rel, name, dir)
+	if err != nil {
+		return "", err
+	}
+	if _, ok := rel.Assets["SHA256SUMS"]; !ok {
+		log("this release has no SHA256SUMS; skipping the checksum")
+		return file, nil
+	}
+	sums, err := c.download(ctx, rel, "SHA256SUMS", dir)
+	if err != nil {
+		return "", fmt.Errorf("couldn't get SHA256SUMS to check %s: %w", name, err)
+	}
+	if err := verify(file, name, sums); err != nil {
+		return "", err
+	}
+	log("checksum ok")
+	return file, nil
+}
+
 func (c *Client) download(ctx context.Context, rel *Release, name, dir string) (string, error) {
 	a, ok := rel.Assets[name]
 	if !ok {

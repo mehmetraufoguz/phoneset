@@ -3,6 +3,7 @@
 package camera
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 )
@@ -27,7 +28,9 @@ func hint() string {
 
 func (u unsupported) Probe() State { return State{Phase: Unsupported, Hint: u.hint} }
 
-func (u unsupported) Install(string) error { return fmt.Errorf("%w. %s", ErrUnsupported, u.hint) }
+func (u unsupported) Install(context.Context, InstallOptions) error {
+	return fmt.Errorf("%w. %s", ErrUnsupported, u.hint)
+}
 
 func (u unsupported) Uninstall() error { return fmt.Errorf("%w. %s", ErrUnsupported, u.hint) }
 

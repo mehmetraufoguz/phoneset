@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mehmetraufoguz/phoneset/pc/internal/camera"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/control"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/system"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/term"
@@ -83,6 +84,7 @@ func cmdUpdate(args []string) error {
 		return err
 	}
 	fmt.Println(term.Green("Updated to " + res.Latest.Tag + " (" + res.Latest.Short() + ")."))
+	refreshCamera(exe)
 
 	// Bring a background service over to the new build.
 	d := configDir(*dir)
@@ -182,4 +184,18 @@ func relaunchAfterQuit(exe string, serveArgs []string) error {
 		return err
 	}
 	return cmd.Process.Release()
+}
+
+// refreshCamera brings the virtual camera over to the new build too, when it is installed: the new program fetches the
+// camera of its own release (the camera and the program talk to each other, so they should be of one release).
+func refreshCamera(exe string) {
+	if st := camera.Default().Probe(); st.Phase == camera.Unsupported || st.Phase == camera.NotInstalled {
+		return
+	}
+	fmt.Println("  Updating the virtual camera…")
+	cmd := exec.Command(exe, "camera", "install", "--force")
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Println(term.Yellow("  The camera was not updated:"), err)
+	}
 }

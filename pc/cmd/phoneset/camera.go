@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -21,6 +22,7 @@ func cmdCamera(args []string) error {
 	}
 	fs := flag.NewFlagSet("camera", flag.ExitOnError)
 	dir := fs.String("config-dir", "", "")
+	force := fs.Bool("force", false, "")
 	_ = fs.Parse(args)
 
 	mon := camera.NewMonitor(camera.Default())
@@ -39,20 +41,23 @@ func cmdCamera(args []string) error {
 		}
 		return nil
 	case "install":
-		return cameraRequest(mon, true)
+		return cameraRequest(mon, true, *force)
 	case "uninstall", "remove":
-		return cameraRequest(mon, false)
+		return cameraRequest(mon, false, false)
 	default:
 		return fmt.Errorf("unknown camera command %q (status, install or uninstall)", sub)
 	}
 }
 
 // cameraRequest asks the system to install or remove the camera and follows it for a moment.
-func cameraRequest(mon *camera.Monitor, install bool) error {
+func cameraRequest(mon *camera.Monitor, install, force bool) error {
 	b := mon.Backend()
 	if install {
 		exe, _ := os.Executable()
-		if err := b.Install(filepath.Dir(exe)); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		say := func(s string) { fmt.Println(term.Dim("  " + s)) }
+		if err := b.Install(ctx, camera.InstallOptions{ExeDir: filepath.Dir(exe), Force: force, Say: say}); err != nil {
 			return err
 		}
 		fmt.Println("Asking the system to install the camera…")

@@ -1,10 +1,12 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/camera"
 )
@@ -27,7 +29,9 @@ func (a *api) cameraReport(w http.ResponseWriter, r *http.Request) {
 
 func (a *api) cameraInstall(w http.ResponseWriter, _ *http.Request) {
 	exe, _ := os.Executable()
-	if err := a.h.CameraMonitor().Backend().Install(filepath.Dir(exe)); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	if err := a.h.CameraMonitor().Backend().Install(ctx, camera.InstallOptions{ExeDir: filepath.Dir(exe)}); err != nil {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}

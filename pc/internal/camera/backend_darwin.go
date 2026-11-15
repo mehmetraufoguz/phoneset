@@ -3,17 +3,22 @@
 package camera
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/mehmetraufoguz/phoneset/pc/internal/update"
 )
 
 const (
 	appName     = "phoneset Camera.app"
 	appPath     = "/Applications/" + appName
 	extensionID = "com.rapp.phoneset.camera.extension"
+	// assetName is the camera app in a release: a zip of the signed, notarized app (macos/release.sh).
+	assetName = "phoneset-camera-macos.zip"
 )
 
 // Default is the macOS camera: the app "phoneset Camera" in /Applications, with a camera extension inside it.
@@ -38,18 +43,67 @@ func (macOS) Probe() State {
 	return s
 }
 
-func (macOS) Install(exeDir string) error {
-	if _, err := os.Stat(appPath); err != nil {
-		src := filepath.Join(exeDir, appName)
-		if _, err := os.Stat(src); err != nil {
-			return fmt.Errorf("%s was found neither next to phoneset nor in /Applications", appName)
+// Install puts the app in /Applications (macOS only installs a camera from there) and asks for the extension.
+// The app comes from next to the phoneset program if it is there; else the one that is installed stays, unless
+// Force asks for the latest; else it is downloaded from the latest release.
+func (macOS) Install(ctx context.Context, o InstallOptions) error {
+	_, haveApp := os.Stat(appPath)
+	local := filepath.Join(o.ExeDir, appName)
+	if _, err := os.Stat(local); err == nil {
+		o.say("installing " + local)
+		if err := place(local); err != nil {
+			return err
 		}
-		// macOS only installs a camera from an app in /Applications.
-		if out, err := exec.Command("ditto", src, appPath).CombinedOutput(); err != nil {
-			return fmt.Errorf("couldn't copy the camera to /Applications: %v %s", err, out)
+	} else if haveApp != nil || o.Force {
+		if err := download(ctx, o); err != nil {
+			return err
 		}
 	}
 	return launch("--install")
+}
+
+// download fetches the camera app of the latest release, checks it and puts it in /Applications.
+func download(ctx context.Context, o InstallOptions) error {
+	cl := update.NewClient()
+	rel, err := cl.Latest(ctx)
+	if err != nil {
+		return fmt.Errorf("couldn't look for the camera app: %w", err)
+	}
+	if _, ok := rel.Assets[assetName]; !ok {
+		return fmt.Errorf("release %s has no camera app for macOS (%s). Build it with macos/build.sh and put "+
+			"“phoneset Camera.app” next to the phoneset program, or wait for a release that has it", rel.Tag, assetName)
+	}
+	tmp, err := os.MkdirTemp("", "phoneset-camera-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	zip, err := cl.Fetch(ctx, rel, assetName, tmp, o.say)
+	if err != nil {
+		return err
+	}
+	// ditto keeps what a signed app needs (permissions, extended attributes, the signature) that an unzip may drop.
+	unpacked := filepath.Join(tmp, "app")
+	if out, err := exec.CommandContext(ctx, "ditto", "-x", "-k", zip, unpacked).CombinedOutput(); err != nil {
+		return fmt.Errorf("couldn't unpack the camera app: %v %s", err, out)
+	}
+	o.say("release " + rel.Tag)
+	return place(filepath.Join(unpacked, appName))
+}
+
+// place replaces the app in /Applications with src. An old copy goes as a whole: a half-updated bundle fails its signature.
+func place(src string) error {
+	if running() {
+		_ = exec.Command("pkill", "-f", appPath+"/Contents/MacOS/").Run()
+		time.Sleep(700 * time.Millisecond)
+	}
+	if err := os.RemoveAll(appPath); err != nil {
+		return fmt.Errorf("couldn't replace %s: %w", appPath, err)
+	}
+	if out, err := exec.Command("ditto", src, appPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("couldn't copy the camera to /Applications: %v %s", err, out)
+	}
+	return nil
 }
 
 func (macOS) Uninstall() error {

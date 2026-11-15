@@ -6,6 +6,7 @@
 package camera
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -46,6 +47,22 @@ type Report struct {
 	Flowing bool   `json:"flowing"`
 }
 
+// InstallOptions say where the camera's files come from and how to report progress.
+type InstallOptions struct {
+	// ExeDir is the folder of the phoneset program: a camera found there is the one installed.
+	ExeDir string
+	// Force fetches the latest release's camera even when one is installed already (an update).
+	Force bool
+	// Say is told what is going on (downloading, checking); it may be nil.
+	Say func(string)
+}
+
+func (o InstallOptions) say(s string) {
+	if o.Say != nil {
+		o.Say(s)
+	}
+}
+
 // ErrUnsupported is returned by a system that has no camera of our own.
 var ErrUnsupported = errors.New("there is no virtual camera of phoneset for this system yet")
 
@@ -53,10 +70,10 @@ var ErrUnsupported = errors.New("there is no virtual camera of phoneset for this
 type Backend interface {
 	// Probe looks at the system: is the camera there and switched on, is the part that carries the picture running.
 	Probe() State
-	// Install puts the camera in place and asks the system to turn it on. exeDir is the folder of the phoneset
-	// program, where the camera's files are looked for. It returns once the request is made; Probe shows the outcome
-	// (the system may wait for the user).
-	Install(exeDir string) error
+	// Install puts the camera in place (from next to the phoneset program, else from what is on the PC, else
+	// downloaded from the latest release) and asks the system to turn it on. It returns once the request is made;
+	// Probe shows the outcome (the system may wait for the user).
+	Install(ctx context.Context, o InstallOptions) error
 	Uninstall() error
 	// Start starts the part that carries the picture, when a phone begins to send it.
 	Start() error

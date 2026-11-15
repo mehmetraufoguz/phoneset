@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/mehmetraufoguz/phoneset/pc/internal/app"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/audio"
+	"github.com/mehmetraufoguz/phoneset/pc/internal/camera"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/control"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/discovery"
 	"github.com/mehmetraufoguz/phoneset/pc/internal/pairing"
@@ -156,7 +158,10 @@ func cmdServe(args []string) error {
 		Quit:        stop,
 		OpenLog:     func() { _ = system.OpenFile(logPath) },
 		CameraInstall: func() {
-			if err := application.Camera.Backend().Install(filepath.Dir(exe)); err != nil {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer cancel()
+			opts := camera.InstallOptions{ExeDir: filepath.Dir(exe), Say: func(s string) { log.Info("camera: " + s) }}
+			if err := application.Camera.Backend().Install(ctx, opts); err != nil {
 				log.Warn("couldn't install the virtual camera", "err", err)
 			}
 		},
