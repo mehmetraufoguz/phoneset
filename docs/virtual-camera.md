@@ -1,6 +1,6 @@
 # A virtual camera of our own: plan
 
-Status: phases 0 and 1 are built and work on the developer's Mac (section 4); the rest is a plan. Written 2026-11-15, after the camera path from the phone to the PC was
+Status: phases 0, 1 and 2 are built and work on the developer's Mac (section 4); Windows and Linux are plans. Written 2026-11-15, after the camera path from the phone to the PC was
 measured (docs/webcam-measurements.md) and shown to work through OBS Studio's Browser source and Virtual Camera on
 Windows 10. The point of a virtual camera of our own is that Zoom, Meet, Teams, FaceTime and the like list "phoneset
 Camera" without OBS in between.
@@ -69,7 +69,7 @@ because an app that was open while macOS replaced the extension keeps an out-of-
 | A tool to generate the Xcode project from a text file (XcodeGen), so that the project is reproducible and reviewable                                                                          | not installed; `brew install xcodegen`                                                                                                                                                                                                                 |
 | The app's entitlement `com.apple.developer.system-extension.install`, a restricted entitlement: with Apple Development signing Xcode's automatic signing provides it                          | to be checked in the first build                                                                                                                                                                                                                       |
 | An App Group shared by the app and the extension (a forum poster reports that the extension's Mach service name must start with one of its groups, which Apple's engineer did not contradict) | to be set up in the project                                                                                                                                                                                                                            |
-| Developer ID signing and notarization for use outside the Mac App Store (system extensions have to be notarized)                                                                              | needs a Developer ID Application certificate and notarization credentials as CI secrets: **the user's step**; whether the Developer ID profile with the System Extension capability needs more than the portal's capability switch is **not verified** |
+| Developer ID signing and notarization for use outside the Mac App Store (system extensions have to be notarized)                                                                              | done 2026-11-15: a Developer ID Application certificate is in the owner's keychain and the System Extension capability is on for `com.rapp.phoneset.camera`; the signed build needs nothing more (the extension has no profile of its own); notarization by a stored profile, by hand (`macos/release.sh`, see macos/README.md), not in CI |
 | First install: the user approves the extension in System Settings, and may need an administrator's password                                                                                   | where exactly and how it reads on macOS 26 is **not verified**; found in the first run                                                                                                                                                                 |
 
 Sources read for this plan: Apple's Core Media I/O overview (developer.apple.com/documentation/coremediaio), the
@@ -113,9 +113,15 @@ Each phase ends with something that can be seen, and the next one starts only wh
    The plan for the phase, as written before it was done: The app reads `/video.frames`, decodes, turns upright, fits and writes to the sink stream;
    the slate when nothing comes. Done when the OPPO's and the iPhone's picture, upright, in both orientations and in
    H.264 and JPEG, shows in Photo Booth, and the slate shows when the phone turns the camera off.
-2. **A product.** A menu bar item (status, launch at login, quit), `phoneset camera install | uninstall | status` in
-   the PC program (it downloads the notarized app from the release and puts it in `/Applications`), Developer ID
-   signing and notarization in the release workflow, README and help text, an uninstall note.
+2. **A product.** _Done 2026-11-15:_ the control is in the PC program, not in a menu bar item of the app (the app has
+   no window): `phoneset camera install | uninstall | status`, the camera line of `phoneset status`, the tray section,
+   and the program starts the helper when a phone begins to send video. `install` takes the app from next to the
+   program, else downloads `phoneset-camera-macos.zip` from the latest release (checked against `SHA256SUMS`; a release
+   that lists `SHA256SUMS` but can't be checked is refused), `--force` and `phoneset update` fetch the latest again.
+   The zip is made by `macos/release.sh` (archive, Developer ID export, notarize, staple, zip; `--upload TAG` adds it to
+   an existing release and to its `SHA256SUMS`), by hand on the owner's Mac. Checked: the notarized build installed from
+   a download (a local fake release), macOS took its extension without a new approval, and the owner saw the iPhone's
+   picture through it. Not checked: the download from a real GitHub release.
 3. **Windows.** A separate plan. Windows 11 (build 22000 and newer) has `MFCreateVirtualCamera`; Windows 10 needs a
    DirectShow filter registered by an administrator; both need a native (C++) component that reads `/video.frames`.
    Until then OBS's Virtual Camera is the way on Windows (it works, see the measurements report).
