@@ -66,5 +66,10 @@ in the app, a "Mac Team Direct" provisioning profile), Apple accepts the notariz
 unpacked zip passes `stapler validate` and `spctl` ("Notarized Developer ID"). If double-clicking the downloaded `.cer`
 fails with error -25294, import it from a terminal: `security import <file>.cer -k ~/Library/Keychains/login.keychain-db`.
 
-Not verified yet: macOS accepting the Developer ID build's extension when it is installed (the extension has no
-provisioning profile of its own, only the sandbox and the app group), and the download path against a real release.
+Installing it (2026-11-15): `phoneset camera install --force` downloaded the notarized zip from a local fake release
+(checksum ok), replaced the development build in /Applications, and macOS took the Developer ID build's extension
+(`[activated enabled]`, no new approval, no crash or launch rejection) although the extension has no provisioning profile
+of its own.
+
+Not verified yet: the phone's picture through the Developer ID build (no phone was connected during the test), and the
+download from a real GitHub release.
