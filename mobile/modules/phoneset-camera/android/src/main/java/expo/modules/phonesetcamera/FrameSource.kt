@@ -53,6 +53,7 @@ class FrameSource(private val context: Context) : FrameProvider {
   private val jpeg = ByteArrayOutputStream(256 * 1024)
 
   private var provider: ProcessCameraProvider? = null
+  private var orientation: DeviceOrientation? = null
 
   @Volatile private var minIntervalNs = 0L
   @Volatile private var quality = 70
@@ -127,6 +128,9 @@ class FrameSource(private val context: Context) : FrameProvider {
           provider.unbindAll()
           provider.bindToLifecycle(owner, selector, analysis)
           this.provider = provider
+          // Follows how the phone is held (the screen is locked to portrait): the picture is turned upright for it.
+          val orientation = DeviceOrientation(context) { rotation -> analysis.targetRotation = rotation }
+          if (orientation.start()) this.orientation = orientation
           done(null)
         } catch (e: Throwable) {
           done(e)
@@ -142,6 +146,8 @@ class FrameSource(private val context: Context) : FrameProvider {
   }
 
   private fun stopOnMain() {
+    orientation?.stop()
+    orientation = null
     provider?.unbindAll()
     provider = null
   }

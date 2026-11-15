@@ -44,6 +44,7 @@ class H264Source(private val context: Context) : FrameProvider {
   private val surfaceExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "phoneset-h264-surface") }
 
   private var provider: ProcessCameraProvider? = null
+  private var orientation: DeviceOrientation? = null
   private var codec: MediaCodec? = null
   private var drain: Thread? = null
   @Volatile private var running = false
@@ -107,6 +108,10 @@ class H264Source(private val context: Context) : FrameProvider {
           provider.unbindAll()
           provider.bindToLifecycle(owner, selector, preview)
           this.provider = provider
+          // Follows how the phone is held (the screen is locked to portrait): CameraX reports the turn the picture
+          // needs for that rotation, and it goes out in the frames' flags.
+          val orientation = DeviceOrientation(context) { rotation -> preview.targetRotation = rotation }
+          if (orientation.start()) this.orientation = orientation
         } catch (e: Throwable) {
           done(e)
         }
@@ -299,6 +304,8 @@ class H264Source(private val context: Context) : FrameProvider {
   }
 
   private fun stopOnMain() {
+    orientation?.stop()
+    orientation = null
     provider?.unbindAll()
     provider = null
   }
