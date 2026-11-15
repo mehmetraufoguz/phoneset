@@ -60,6 +60,11 @@ Each release: push the tag and let the release job make the release, then on thi
 release's `SHA256SUMS`. Before the first real release, check the certificate and the profile with
 `macos/release.sh --no-notarize` (signs only, uploads nothing).
 
-Not verified yet: a real signing and notarization run (no Developer ID certificate on the development Mac), whether
-the Developer ID profile Xcode makes carries the System Extension entitlement without more than step 2, and the
-download path against a real release.
+Checked on the development Mac (2026-11-15): `macos/release.sh --no-notarize` builds, exports with the Developer ID
+certificate (hardened runtime, secure timestamp, `com.apple.developer.system-extension.install` in the app, a "Mac Team
+Direct" provisioning profile), and the signature verifies. If double-clicking the downloaded `.cer` fails with error
+-25294, import it from a terminal: `security import <file>.cer -k ~/Library/Keychains/login.keychain-db`.
+
+Not verified yet: notarization (needs the credentials of step 3), macOS accepting the Developer ID build's extension
+(the extension has no provisioning profile of its own, only the sandbox and the app group), and the download path
+against a real release.
