@@ -128,15 +128,24 @@ Each phase ends with something that can be seen, and the next one starts only wh
    - **3a. Does a DirectShow camera of ours work on Windows 10? _Done 2026-11-15_ (build 19045, see `windows/README.md`):**
      yes. softcam (MIT, a DirectShow source filter with a sender API), built with our own name, CLSID and shared memory
      names by `windows/build.ps1`, registered by `windows/install.ps1`, showed a moving test picture in ffmpeg, OBS,
-     Chrome and Edge (the owner saw it). Learned: the DLL has to be in `C:\Program Files\phoneset\camera` (readable by
-     `ALL APPLICATION PACKAGES`), because Chrome and Edge read cameras in a sandboxed process that cannot load a DLL from
-     a user folder; registering needs an administrator (UAC), so `phoneset camera install` on Windows has to ask for it;
+     Chrome and Edge (the owner saw it). Learned: with the DLL in a user folder and the browsers already open, the web page's camera picker in Chrome and Edge did not
+     offer the camera (the browser's settings page listed it); from `C:\Program Files\phoneset\camera` and after the browsers were
+     restarted it did. Which of the two fixed it was **not tested** (the first explanation, a sandbox that cannot load a DLL from a user
+     folder, is probably wrong: Chrome's camera process ran with `--service-sandbox-type=none` on that PC); Program Files is the right
+     place for a product anyway; Chrome's video capture service keeps the DLL loaded after it used the camera, so removing or replacing
+     the file fails ("access denied") until that helper process is closed, and an uninstall or update has to say so; registering needs an administrator (UAC), so `phoneset camera install` on Windows has to ask for it;
      with no sender running the camera cannot be opened at all (no output pin), so the "Waiting for your phone" slate
      needs either a helper that keeps a sender alive or a change to the filter so that it makes its pin and the slate
      itself (the second matches macOS, where the extension has its own slate, and works while the program is not
      running); only an x64 DLL, so 32-bit camera programs do not see it. Not tried: the Windows Camera app, Zoom, Teams.
    - **3b. The phone's picture.** A helper reads `/video.frames`, decodes (Media Foundation for H.264, WIC for JPEG), turns
-     it upright, fits it into 1280 x 720 and writes it through the sender API. _Not started._
+     it upright, fits it into 1280 x 720 and writes it through the sender API. _Not started as a product;_ a throwaway bridge
+     outside the repository (agent, ffmpeg for turning and fitting, a small C++ sender that repeats the last frame at 30 frames a
+     second) showed the OPPO's JPEG picture (back and front camera) in Chrome (the owner saw it), and an H.264 frame (front
+     camera, rotation 2) upright through the camera by ffmpeg. Learned: `/video.mjpg` gives nothing for an H.264 camera, so the
+     helper has to read `/video.frames` (rotation per record, no restart when it changes); ffmpeg's `-fflags nobuffer -flags
+     low_delay` stall a raw H.264 input after the first frame (a fault of the bridge, not of the agent or the phone); when the
+     phone or the network goes the last frame stays frozen, so the helper must send the slate itself after a while without frames.
    - **3c. A product.** A Windows `Backend` in `pc/internal/camera` (download the signed zip from the release, ask for
      administrator rights, register, remove), the tray section, `phoneset update`. Windows 11 with `MFCreateVirtualCamera`
      is looked at separately. _Not started._
