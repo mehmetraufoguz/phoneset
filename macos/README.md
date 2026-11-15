@@ -41,9 +41,11 @@ It is done by hand on a Mac, not in CI: no certificate or key is ever in GitHub.
 One-time setup, on Apple's side (only the account holder can do it):
 
 1. **Developer ID Application certificate.** Xcode, Settings, Accounts, pick the team, Manage Certificates, +,
-   Developer ID Application. (Needs the paid Apple Developer Program; the key stays in this Mac's keychain.)
-2. **System Extension capability.** developer.apple.com, Certificates, Identifiers & Profiles, Identifiers, open
-   `com.rapp.phoneset.camera`, Capabilities, tick System Extension, Save. (App Groups is on already.)
+   Developer ID Application. (Needs the paid Apple Developer Program; the key stays in this Mac's keychain.) The
+   account has none yet (`asc certificates list` shows only Development and iOS Distribution), and `asc` can't make
+   it: the API answers "can only be performed by the Account Holder", so it has to be Xcode or the portal.
+2. **System Extension capability** on `com.rapp.phoneset.camera`: already on (`asc bundle-ids capabilities list
+   --bundle K833XU23GP` shows SYSTEM_EXTENSION_INSTALL). Nothing to do.
 3. **Notarization credentials.** appleid.apple.com, Sign-In and Security, App-Specific Passwords, make one named
    "phoneset notary". Then in a terminal, once (it asks for the password; type it there):
    `xcrun notarytool store-credentials phoneset-notary --apple-id <your Apple ID> --team-id JY83GWM55C`
