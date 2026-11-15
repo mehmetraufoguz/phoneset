@@ -4,7 +4,7 @@
 # `phoneset camera install` downloads from a release, so it has to be the signed and notarized one: macOS refuses
 # to run a camera extension that is not (Developer ID signed apps are the ones that can ship outside the App Store).
 #
-# usage: macos/release.sh [--version X.Y.Z] [--out DIR] [--no-notarize]
+# usage: macos/release.sh [--version X.Y.Z] [--out DIR] [--no-notarize] [--upload TAG]
 #
 # What it needs (only you can create these, see macos/README.md, "Releasing"):
 #   - a "Developer ID Application" certificate with its private key in a keychain (Xcode, Settings, Accounts,
@@ -16,17 +16,22 @@
 #     signed in to Xcode on the machine.
 #
 # --no-notarize signs only (to check the certificate and the profile work before the first real release).
+# --upload TAG puts the zip on the existing GitHub release TAG (needs `gh auth login`) and adds its line to the
+#   release's SHA256SUMS, which the program checks the download against. This is the way to release without any
+#   certificate or key in GitHub: sign here, on your Mac, after the tag's release exists.
 set -eu
 cd "$(dirname "$0")"
 
 VERSION="${VERSION:-}"
 OUT="release"
 NOTARIZE=1
+UPLOAD=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) VERSION="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --no-notarize) NOTARIZE=0; shift ;;
+    --upload) UPLOAD="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -34,6 +39,13 @@ done
 # A release tag looks like v0.2.0; the app wants 0.2.0.
 VERSION="${VERSION#v}"
 [ -n "$VERSION" ] || VERSION="$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml | head -1)"
+
+if [ -n "$UPLOAD" ]; then
+  [ "$NOTARIZE" = 1 ] || { echo "--upload needs the notarized build: drop --no-notarize." >&2; exit 2; }
+  command -v gh > /dev/null || { echo "--upload needs the GitHub CLI (gh), signed in: gh auth login" >&2; exit 1; }
+  # Fail now, not after the half hour of building, if the release isn't there.
+  gh release view "$UPLOAD" > /dev/null || { echo "there is no GitHub release $UPLOAD (push the tag and wait for the release job first)" >&2; exit 1; }
+fi
 
 # Credentials for xcodebuild and notarytool, by what is set.
 XCODE_AUTH=""
@@ -124,3 +136,17 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 echo "done: $ZIP"
 cat "$ZIP.sha256"
 [ "$NOTARIZE" = 1 ] || echo "NOT notarized (--no-notarize): do not publish this file."
+
+if [ -n "$UPLOAD" ]; then
+  echo "==> upload to release $UPLOAD"
+  SUMS="$BUILD/sums"
+  rm -rf "$SUMS"; mkdir -p "$SUMS"
+  gh release upload "$UPLOAD" "$ZIP" --clobber
+  # The release's SHA256SUMS gets this file's line (an older line of it goes), the rest stays as it is.
+  gh release download "$UPLOAD" --pattern SHA256SUMS --dir "$SUMS" --clobber 2> /dev/null || : > "$SUMS/SHA256SUMS"
+  { grep -v "  phoneset-camera-macos.zip$" "$SUMS/SHA256SUMS" || true; cat "$ZIP.sha256"; } > "$SUMS/new"
+  mv "$SUMS/new" "$SUMS/SHA256SUMS"
+  gh release upload "$UPLOAD" "$SUMS/SHA256SUMS" --clobber
+  echo "uploaded; SHA256SUMS now:"
+  cat "$SUMS/SHA256SUMS"
+fi

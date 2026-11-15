@@ -44,9 +44,14 @@ Only the owner can create what it needs:
 3. Notarization credentials: an App Store Connect API key (.p8, key id, issuer id), or a profile made once with
    `xcrun notarytool store-credentials` (then `NOTARY_PROFILE=<name>`).
 
-Try it by hand first: `macos/release.sh --no-notarize` (signs only), then the full run. For CI set the repository
-variable `MACOS_CAMERA=true` and the secrets `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `ASC_KEY_ID`,
-`ASC_ISSUER_ID`, `ASC_KEY_P8`; until then the release job skips the camera and the release has no camera app.
+Try it by hand first: `macos/release.sh --no-notarize` (signs only), then the full run.
+
+**By hand (no certificate or key in GitHub).** Push the tag and let the release job make the release, then on your
+Mac: `macos/release.sh --version X.Y.Z --upload vX.Y.Z`. It builds, signs, notarizes, uploads
+`phoneset-camera-macos.zip` and adds its line to the release's `SHA256SUMS`.
+
+**In CI (optional).** Set the repository variable `MACOS_CAMERA=true` and the secrets `MACOS_CERT_P12_BASE64`,
+`MACOS_CERT_PASSWORD`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`. Until then the release job skips the camera.
 
 Not verified yet: a real signing and notarization run (no Developer ID certificate on the development Mac), and
 the download path against a real release.
