@@ -31,27 +31,33 @@ What the app does is logged under the subsystem `com.rapp.phoneset.camera` (the 
 /usr/bin/log show --last 1m --info --debug --predicate 'subsystem BEGINSWITH "com.rapp.phoneset.camera"'
 ```
 
-## Releasing (signed and notarized)
+## Releasing (signed and notarized, from this Mac)
 
 `phoneset camera install` downloads `phoneset-camera-macos.zip` from the latest GitHub release when the app is not
 next to the program or in /Applications. That file has to be signed with a Developer ID certificate and notarized by
 Apple; `macos/release.sh` makes it (archive, export with `ExportOptions.plist`, notarize, staple, zip, checksum).
+It is done by hand on a Mac, not in CI: no certificate or key is ever in GitHub.
 
-Only the owner can create what it needs:
+One-time setup, on Apple's side (only the account holder can do it):
 
-1. A **Developer ID Application** certificate (Xcode, Settings, Accounts, Manage Certificates, +).
-2. On developer.apple.com, the **System Extension** capability on the identifier `com.rapp.phoneset.camera`.
-3. Notarization credentials: an App Store Connect API key (.p8, key id, issuer id), or a profile made once with
-   `xcrun notarytool store-credentials` (then `NOTARY_PROFILE=<name>`).
+1. **Developer ID Application certificate.** Xcode, Settings, Accounts, pick the team, Manage Certificates, +,
+   Developer ID Application. (Needs the paid Apple Developer Program; the key stays in this Mac's keychain.)
+2. **System Extension capability.** developer.apple.com, Certificates, Identifiers & Profiles, Identifiers, open
+   `com.rapp.phoneset.camera`, Capabilities, tick System Extension, Save. (App Groups is on already.)
+3. **Notarization credentials.** appleid.apple.com, Sign-In and Security, App-Specific Passwords, make one named
+   "phoneset notary". Then in a terminal, once (it asks for the password; type it there):
+   `xcrun notarytool store-credentials phoneset-notary --apple-id <your Apple ID> --team-id JY83GWM55C`
+   (An App Store Connect API key works too: `ASC_KEY_PATH`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, see release.sh.)
+4. If notarization answers 403, accept the new agreements at developer.apple.com and appstoreconnect.apple.com.
 
-Try it by hand first: `macos/release.sh --no-notarize` (signs only), then the full run.
+Each release: push the tag and let the release job make the release, then on this Mac
 
-**By hand (no certificate or key in GitHub).** Push the tag and let the release job make the release, then on your
-Mac: `macos/release.sh --version X.Y.Z --upload vX.Y.Z`. It builds, signs, notarizes, uploads
-`phoneset-camera-macos.zip` and adds its line to the release's `SHA256SUMS`.
+    NOTARY_PROFILE=phoneset-notary macos/release.sh --version X.Y.Z --upload vX.Y.Z
 
-**In CI (optional).** Set the repository variable `MACOS_CAMERA=true` and the secrets `MACOS_CERT_P12_BASE64`,
-`MACOS_CERT_PASSWORD`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`. Until then the release job skips the camera.
+(needs `gh auth login`). It builds, signs, notarizes, uploads `phoneset-camera-macos.zip` and adds its line to the
+release's `SHA256SUMS`. Before the first real release, check the certificate and the profile with
+`macos/release.sh --no-notarize` (signs only, uploads nothing).
 
-Not verified yet: a real signing and notarization run (no Developer ID certificate on the development Mac), and
-the download path against a real release.
+Not verified yet: a real signing and notarization run (no Developer ID certificate on the development Mac), whether
+the Developer ID profile Xcode makes carries the System Extension entitlement without more than step 2, and the
+download path against a real release.

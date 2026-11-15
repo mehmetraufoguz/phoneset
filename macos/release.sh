@@ -11,9 +11,9 @@
 #     Manage Certificates, +, Developer ID Application),
 #   - notarization credentials, one of:
 #       NOTARY_PROFILE                       a profile made once with `xcrun notarytool store-credentials`, or
-#       ASC_KEY_PATH, ASC_KEY_ID, ASC_ISSUER_ID   an App Store Connect API key (.p8) with its two ids (CI).
-#     With the ASC_* variables xcodebuild also uses the key to fetch the provisioning profile, so no Apple ID is
-#     signed in to Xcode on the machine.
+#       ASC_KEY_PATH, ASC_KEY_ID, ASC_ISSUER_ID   an App Store Connect API key (.p8) with its two ids.
+#     With the ASC_* variables xcodebuild also uses the key to fetch the provisioning profile; with NOTARY_PROFILE it
+#     is the Apple ID signed in to Xcode that does.
 #
 # --no-notarize signs only (to check the certificate and the profile work before the first real release).
 # --upload TAG puts the zip on the existing GitHub release TAG (needs `gh auth login`) and adds its line to the
