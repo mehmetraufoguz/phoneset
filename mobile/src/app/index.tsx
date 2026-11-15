@@ -1,12 +1,16 @@
 import { Button, Column, FieldGroup, Host, Row, Spacer, Text } from "@expo/ui"
+import { Effect } from "effect"
 import { Stack, useFocusEffect, useRouter } from "expo-router"
-import { useCallback, useState } from "react"
-import { Alert } from "react-native"
+import { useCallback, useEffect, useState } from "react"
 import { summarize } from "../core/presence"
 import { Session } from "../core/session"
 import { type PairedPc, PairedPcs } from "../core/storage"
 import { act, BRAND, useColors, useDiscovered, usePairedPcs, useSessionState } from "../ui/hooks"
+import { canSwipeToForget, swipeToForget } from "../ui/swipeToForget"
 import { toolbarButton } from "../ui/toolbar"
+
+/** How long the Undo row stays after a PC is forgotten. */
+const UNDO_FOR_MS = 8000
 
 export default function Home() {
   const router = useRouter()
@@ -56,18 +60,29 @@ export default function Home() {
     )
   }
 
-  const forget = (pc: PairedPc) =>
-    Alert.alert(`Forget ${pc.name}?`, "You'll need to pair with it again to use it.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Forget",
-        style: "destructive",
-        onPress: () => {
-          act(PairedPcs.use((p) => p.remove(pc.id)))
-          setRefresh((n) => n + 1)
-        }
-      }
-    ])
+  // Forgetting is one step, with no question: the PC is kept in memory for a few seconds and an Undo row
+  // puts it back (a dialog for a thing that can be undone only gets in the way).
+  const [forgotten, setForgotten] = useState<PairedPc | null>(null)
+  useEffect(() => {
+    if (forgotten === null) return
+    const timer = setTimeout(() => setForgotten(null), UNDO_FOR_MS)
+    return () => clearTimeout(timer)
+  }, [forgotten])
+
+  // The list is read again once the change has been written, not before: `act` only starts the work.
+  const refreshed = Effect.sync(() => setRefresh((n) => n + 1))
+
+  const forget = (pc: PairedPc) => {
+    setForgotten(pc)
+    act(PairedPcs.use((p) => p.remove(pc.id)).pipe(Effect.andThen(refreshed)))
+  }
+
+  const undo = () => {
+    if (forgotten === null) return
+    const pc = forgotten
+    setForgotten(null)
+    act(PairedPcs.use((p) => p.save(pc)).pipe(Effect.andThen(refreshed)))
+  }
 
   return (
     <>
@@ -106,13 +121,27 @@ export default function Home() {
                     />
                   </Column>
                 ) : (
-                  <Row key={pc.id} alignment="center" spacing={8}>
-                    {details(pc)}
-                    <Spacer flexible />
-                    <Button variant="text" label="Forget" onPress={() => forget(pc)} />
-                  </Row>
+                  // Swipe the row to forget it where the platform can; otherwise it has a Forget button.
+                  swipeToForget(
+                    pc.id,
+                    <Row key={pc.id} alignment="center" spacing={8}>
+                      {details(pc)}
+                      <Spacer flexible />
+                      {canSwipeToForget ? null : (
+                        <Button variant="text" label="Forget" onPress={() => forget(pc)} />
+                      )}
+                    </Row>,
+                    () => forget(pc)
+                  )
                 )
               )
+            )}
+            {forgotten === null ? null : (
+              <Row alignment="center" spacing={8}>
+                <Text textStyle={{ color: colors.secondary }}>{`Forgot ${forgotten.name}`}</Text>
+                <Spacer flexible />
+                <Button variant="text" label="Undo" onPress={undo} />
+              </Row>
             )}
           </FieldGroup.Section>
         </FieldGroup>
