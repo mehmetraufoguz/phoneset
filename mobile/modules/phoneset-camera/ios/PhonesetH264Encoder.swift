@@ -18,11 +18,16 @@ final class PhonesetH264Encoder {
 
   private var session: VTCompressionSession?
   private let output: Output
+  /// The size of the pictures this coder was made for; a picture of another size needs a new coder.
+  let width: Int
+  let height: Int
   private static let startCode: [UInt8] = [0, 0, 0, 1]
 
   /// nil when the phone has no hardware coder for this size.
   init?(width: Int, height: Int, fps: Int, bitrate: Int, output: @escaping Output) {
     self.output = output
+    self.width = width
+    self.height = height
     // An iPhone codes H.264 in hardware by default; from iOS 17.4 it can be required, so that a phone
     // without one fails instead of coding in software.
     var specification: [String: Any] = [:]

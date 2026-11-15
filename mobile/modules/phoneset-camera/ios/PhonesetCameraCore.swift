@@ -43,6 +43,10 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   private var lastEncode: CFAbsoluteTime = 0
   private var seq: UInt32 = 0
 
+  // iOS 17 and newer: follows how the phone is held and turns the connection's picture to match (see followOrientation).
+  private var rotationCoordinator: AnyObject?
+  private var rotationObservation: NSKeyValueObservation?
+
   // Counters for stats(); touched on the capture queue and read from anywhere, under the lock.
   private var startedAt: CFAbsoluteTime = 0
   private var analysed = 0
@@ -103,9 +107,10 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     }
     session.addOutput(output)
     if let connection = output.connection(with: .video) {
-      // Upright for a phone held in portrait, and not mirrored, whichever camera it is.
+      // Upright for the way the phone is held (portrait, on iOS before 17), and not mirrored, whichever camera it is.
       if #available(iOS 17.0, *) {
         if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+        followOrientation(of: device, connection: connection)
       } else if connection.isVideoOrientationSupported {
         connection.videoOrientation = .portrait
       }
@@ -134,8 +139,33 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     session.startRunning()
   }
 
+  /// The phone's own sense of how it is held decides how the picture is turned, so a phone held across gives a
+  /// landscape picture, which is what a webcam is expected to give (the app's screen stays in portrait, so the
+  /// screen's orientation says nothing). The picture changes shape when the phone is turned; the H.264 coder is
+  /// made again for the new size (see `code`).
+  @available(iOS 17.0, *)
+  private func followOrientation(of device: AVCaptureDevice, connection: AVCaptureConnection) {
+    let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+    rotationCoordinator = coordinator
+    apply(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection)
+    rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.new]) {
+      [weak self, weak connection] coordinator, _ in
+      guard let self, let connection else { return }
+      self.apply(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection)
+    }
+  }
+
+  @available(iOS 17.0, *)
+  private func apply(_ angle: CGFloat, to connection: AVCaptureConnection) {
+    queue.async {
+      if connection.isVideoRotationAngleSupported(angle) { connection.videoRotationAngle = angle }
+    }
+  }
+
   /// Stops the camera and fails whoever was waiting for a frame.
   func stop() {
+    rotationObservation = nil
+    rotationCoordinator = nil
     if session.isRunning { session.stopRunning() }
     session.beginConfiguration()
     session.inputs.forEach { session.removeInput($0) }
@@ -231,13 +261,24 @@ final class PhonesetCameraCore: NSObject, AVCaptureVideoDataOutputSampleBufferDe
   ) {
     lock.lock()
     var coder = encoder
-    let forceKey = needKey
+    var forceKey = needKey
     needKey = false
     inFlight.append((callback, number, captured, started))
     width = w
     height = h
     lock.unlock()
 
+    if let old = coder, old.width != w || old.height != h {
+      // The phone was turned and the picture changed shape: the coder is made again for the new size, and the
+      // first picture of it is a key frame (with its own SPS and PPS). The pictures the old coder still holds
+      // are finished first; they come out through `deliver` in the order they went in.
+      old.invalidate()
+      lock.lock()
+      encoder = nil
+      lock.unlock()
+      coder = nil
+      forceKey = true
+    }
     if coder == nil {
       // About 0.1 bit per pixel: 6 Mbit/s at 1080p30, 25 at 4K30, which the link and the phone carry.
       let bitrate = max(1_500_000, min(60_000_000, Int(Double(w * h) * Double(askedFps) * 0.1)))
