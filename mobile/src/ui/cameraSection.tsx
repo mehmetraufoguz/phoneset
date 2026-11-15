@@ -2,7 +2,7 @@ import { Button, FieldGroup, Picker, Row, Spacer, Switch, Text } from "@expo/ui"
 import type { ReactElement } from "react"
 import type { VideoStatus } from "../core/session"
 import { Session } from "../core/session"
-import { modeName, TIERS, tiersOffered } from "../core/videoModes"
+import { modeName, modesOfFormat, TIERS, tiersOffered, type VideoFormat } from "../core/videoModes"
 import { act, type useColors } from "./hooks"
 
 type Colors = ReturnType<typeof useColors>
@@ -14,8 +14,7 @@ function detailOf(v: VideoStatus): { text: string; problem: boolean } {
   if (v.busy) return { text: "Starting…", problem: false }
   const r = v.report
   if (!v.on || r === null) return { text: "Off", problem: false }
-  const asked = `${TIERS.find((t) => t.height === v.quality)?.name ?? `${v.quality}p`}${v.rate}`
-  const used = modeName(r.mode)
+  const used = `${modeName(r.mode)} ${r.mode.codec === "h264" ? "H.264" : "JPEG"}`
   const viewers =
     r.viewers === 0
       ? "not open on the PC yet"
@@ -24,7 +23,7 @@ function detailOf(v: VideoStatus): { text: string; problem: boolean } {
         : `${r.viewers} viewers`
   const sent = `${used}  ·  ${((r.kBps * 8) / 1000).toFixed(1)} Mbit/s  ·  ${viewers}`
   return {
-    text: r.adjusted ? `${asked} isn't available here, so ${sent}` : sent,
+    text: r.adjusted ? `What you picked isn't available here, so ${sent}` : sent,
     problem: false
   }
 }
@@ -37,7 +36,8 @@ function detailOf(v: VideoStatus): { text: string; problem: boolean } {
  */
 export function cameraSection(v: VideoStatus, colors: Colors): ReactElement {
   const detail = detailOf(v)
-  const offered = v.report === null ? null : tiersOffered(v.report.offered)
+  // The sizes and rates are those of the format picked (every format when it is left to the app).
+  const offered = v.report === null ? null : tiersOffered(modesOfFormat(v.report.offered, v.format))
   // Until the camera has been on nothing is known about the PC, so every planned size is listed.
   const sizes = (offered ?? TIERS.map((t) => ({ height: t.height, name: t.name, maxFps: 60 }))).map(
     (t) => ({ height: t.height, name: t.name })
@@ -90,6 +90,21 @@ export function cameraSection(v: VideoStatus, colors: Colors): ReactElement {
             </Picker>
           </Row>
           <Row alignment="center" spacing={8}>
+            <Text>Format</Text>
+            <Spacer flexible />
+            <Picker
+              selectedValue={v.format}
+              enabled={!v.busy}
+              onValueChange={(format) =>
+                act(Session.use((s) => s.setFormat(format as VideoFormat)))
+              }
+            >
+              <Picker.Item label="Automatic" value="auto" />
+              <Picker.Item label="H.264" value="h264" />
+              <Picker.Item label="JPEG" value="jpeg" />
+            </Picker>
+          </Row>
+          <Row alignment="center" spacing={8}>
             <Text>Smoothness</Text>
             <Spacer flexible />
             <Picker
@@ -107,8 +122,10 @@ export function cameraSection(v: VideoStatus, colors: Colors): ReactElement {
       <FieldGroup.SectionFooter>
         <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
           The picture follows how you hold the phone: across for a landscape picture, upright for a
-          portrait one. A bigger picture needs a faster Wi-Fi and warms the phone up. Keep this
-          screen open while the camera is on. To see it on your PC, run `phoneset video` there.
+          portrait one. A bigger picture needs a faster Wi-Fi and warms the phone up. Automatic uses
+          H.264, which is smaller and smoother; JPEG is for programs on the PC that read plain MJPEG
+          (`phoneset video --mjpeg`), but it needs much more Wi-Fi and the phone works harder. Keep
+          this screen open while the camera is on. To see it on your PC, run `phoneset video` there.
         </Text>
       </FieldGroup.SectionFooter>
     </FieldGroup.Section>

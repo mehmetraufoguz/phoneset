@@ -62,14 +62,18 @@ export const modesFor = (
   return modes
 }
 
-/** What the user asked the camera for: a size (the picture's height) and a frame rate. */
+/** The format the user picked: left to the app, or one codec. */
+export type VideoFormat = "auto" | "h264" | "jpeg"
+
+/** What the user asked the camera for: a size (the picture's height), a frame rate and a format. */
 export interface VideoPrefs {
   readonly height: number
   readonly fps: number
+  readonly format: VideoFormat
 }
 
-/** 720p at 30 frames a second: what is sent until the user picks something else. */
-export const DEFAULT_PREFS: VideoPrefs = { height: 720, fps: 30 }
+/** 720p at 30 frames a second, format left to the app: what is sent until the user picks something else. */
+export const DEFAULT_PREFS: VideoPrefs = { height: 720, fps: 30, format: "auto" }
 
 /** The mode to use, and whether it is not what was asked for (the phone or the PC does not offer that). */
 export interface PickedMode {
@@ -93,32 +97,44 @@ export const tiersOffered = (modes: ReadonlyArray<VideoMode>): ReadonlyArray<Tie
       : [{ height: tier.height, name: tier.name, maxFps: Math.max(...at.map((m) => m.fps)) }]
   })
 
-/** Prefers JPEG where both are offered (the PC's MJPEG address keeps working), else the first. */
-const preferJpeg = (modes: ReadonlyArray<VideoMode>): VideoMode | null =>
-  modes.find((m) => m.codec === "jpeg") ?? modes[0] ?? null
+/** The modes of the picked format; all of them when the format is left to the app or none is offered. */
+export const modesOfFormat = (
+  modes: ReadonlyArray<VideoMode>,
+  format: VideoFormat
+): ReadonlyArray<VideoMode> => {
+  if (format === "auto") return modes
+  const of = modes.filter((m) => m.codec === format)
+  return of.length === 0 ? modes : of
+}
+
+/** Where two modes have the same size and rate, the format left to the app is H.264 (smaller, smoother), else the first. */
+const preferred = (modes: ReadonlyArray<VideoMode>): VideoMode | null =>
+  modes.find((m) => m.codec === "h264") ?? modes[0] ?? null
 
 /**
- * The mode for what was asked: that size at that rate. Where the phone or the PC does not offer it, the nearest:
+ * The mode for what was asked: that size at that rate in that format. A format that is not offered at all (the PC
+ * does not take it, or the phone cannot make it) is dropped. Where the size or rate is not offered, the nearest:
  * the same size at the closest rate, else the closest size (smaller first on a tie) at the closest rate.
  */
 export const pickMode = (
   modes: ReadonlyArray<VideoMode>,
   prefs: VideoPrefs = DEFAULT_PREFS
 ): PickedMode | null => {
+  if (modes.length === 0) return null
+  const pool = modesOfFormat(modes, prefs.format)
+  const formatDropped = prefs.format !== "auto" && pool === modes
   const closest = (candidates: ReadonlyArray<VideoMode>, by: (m: VideoMode) => number) => {
     const best = Math.min(...candidates.map(by))
     return candidates.filter((m) => by(m) === best)
   }
-  if (modes.length === 0) return null
-  const exact = modes.filter((m) => m.height === prefs.height && m.fps === prefs.fps)
-  const exactMode = preferJpeg(exact)
-  if (exactMode !== null) return { mode: exactMode, adjusted: false }
+  const exact = preferred(pool.filter((m) => m.height === prefs.height && m.fps === prefs.fps))
+  if (exact !== null) return { mode: exact, adjusted: formatDropped }
   // The nearest size first, then the nearest rate at it (a lower rate before a higher one).
   const sizes = closest(
-    modes,
+    pool,
     (m) => Math.abs(m.height - prefs.height) * 2 + (m.height > prefs.height ? 1 : 0)
   )
   const rates = closest(sizes, (m) => Math.abs(m.fps - prefs.fps) * 2 + (m.fps > prefs.fps ? 1 : 0))
-  const mode = preferJpeg(rates)
+  const mode = preferred(rates)
   return mode === null ? null : { mode, adjusted: true }
 }

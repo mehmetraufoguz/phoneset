@@ -38,7 +38,7 @@ import {
 import { SocketFactory } from "./socket"
 import { type PairedPc, PairedPcs, type PhoneIdentity } from "./storage"
 import { runVideo, type VideoReport } from "./videoChannel"
-import { DEFAULT_PREFS } from "./videoModes"
+import { DEFAULT_PREFS, type VideoFormat } from "./videoModes"
 
 export interface StreamStatus {
   readonly on: boolean
@@ -64,6 +64,8 @@ export interface VideoStatus {
   /** What the user asked for: the picture's height, and the frame rate. Kept while the camera is off. */
   readonly quality: number
   readonly rate: number
+  /** The format picked: left to the app (auto), H.264 or JPEG. */
+  readonly format: VideoFormat
   readonly error: string | null
   readonly report: VideoReport | null
 }
@@ -108,6 +110,7 @@ interface StreamRequest {
   /** The size (the picture's height) and the frame rate asked for. */
   readonly quality?: number
   readonly rate?: number
+  readonly format?: VideoFormat
 }
 
 interface Route {
@@ -122,7 +125,8 @@ const nothingOn: Required<StreamRequest> = {
   video: false,
   camera: "back",
   quality: DEFAULT_PREFS.height,
-  rate: DEFAULT_PREFS.fps
+  rate: DEFAULT_PREFS.fps,
+  format: DEFAULT_PREFS.format
 }
 
 const MAX_RECONNECTS = 6
@@ -152,6 +156,8 @@ export class Session extends Context.Service<
     /** Picks the size (the picture's height) and the frame rate; while the camera is on it starts again with them. */
     readonly setQuality: (height: number) => Effect.Effect<void>
     readonly setRate: (fps: number) => Effect.Effect<void>
+    /** Picks the format: left to the app, or one codec (the picture starts again if the camera is on). */
+    readonly setFormat: (format: VideoFormat) => Effect.Effect<void>
     /** Running streams are stopped and started again so the audio session can take the new mode. */
     readonly setVoiceProcessing: (on: boolean) => Effect.Effect<void>
   }
@@ -370,6 +376,7 @@ function makeSession() {
             camera: (yield* Ref.get(desired)).camera,
             quality: (yield* Ref.get(desired)).quality,
             rate: (yield* Ref.get(desired)).rate,
+            format: (yield* Ref.get(desired)).format,
             error: null,
             report: null
           },
@@ -474,7 +481,7 @@ function makeSession() {
                   token,
                   facing,
                   codecs: ready.video?.codecs ?? ["jpeg"],
-                  prefs: { height: wanted.quality, fps: wanted.rate }
+                  prefs: { height: wanted.quality, fps: wanted.rate, format: wanted.format }
                 },
                 (report) => setVideoStatus({ on: true, busy: false, report })
               )
@@ -516,10 +523,14 @@ function makeSession() {
             yield* setVideoStatus({
               ...(req.camera !== undefined ? { camera: req.camera } : {}),
               ...(req.quality !== undefined ? { quality: req.quality } : {}),
-              ...(req.rate !== undefined ? { rate: req.rate } : {})
+              ...(req.rate !== undefined ? { rate: req.rate } : {}),
+              ...(req.format !== undefined ? { format: req.format } : {})
             })
             const changed =
-              req.camera !== undefined || req.quality !== undefined || req.rate !== undefined
+              req.camera !== undefined ||
+              req.quality !== undefined ||
+              req.rate !== undefined ||
+              req.format !== undefined
             if (d.video && (req.video === true || changed)) return yield* startVideo(d.camera)
           })
 
@@ -540,18 +551,20 @@ function makeSession() {
 
         const request = (all: StreamRequest) =>
           Effect.gen(function* () {
-            const { video, camera: facing, quality, rate, ...req } = all
+            const { video, camera: facing, quality, rate, format, ...req } = all
             if (
               video !== undefined ||
               facing !== undefined ||
               quality !== undefined ||
-              rate !== undefined
+              rate !== undefined ||
+              format !== undefined
             )
               yield* videoRequest({
                 ...(video !== undefined ? { video } : {}),
                 ...(facing !== undefined ? { camera: facing } : {}),
                 ...(quality !== undefined ? { quality } : {}),
-                ...(rate !== undefined ? { rate } : {})
+                ...(rate !== undefined ? { rate } : {}),
+                ...(format !== undefined ? { format } : {})
               })
             if (req.mic === undefined && req.speaker === undefined) return
             if (req.mic !== undefined) {
@@ -728,6 +741,7 @@ function makeSession() {
       setCamera: (facing) => request({ camera: facing }).pipe(Effect.asVoid),
       setQuality: (height) => request({ quality: height }).pipe(Effect.asVoid),
       setRate: (fps) => request({ rate: fps }).pipe(Effect.asVoid),
+      setFormat: (format) => request({ format }).pipe(Effect.asVoid),
       setVoiceProcessing: (on) =>
         Effect.gen(function* () {
           yield* Ref.set(voiceProcessing, on)
