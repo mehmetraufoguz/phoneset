@@ -71,5 +71,6 @@ Installing it (2026-11-15): `phoneset camera install --force` downloaded the not
 (`[activated enabled]`, no new approval, no crash or launch rejection) although the extension has no provisioning profile
 of its own.
 
-Not verified yet: the phone's picture through the Developer ID build (no phone was connected during the test), and the
-download from a real GitHub release.
+The phone's picture through the Developer ID build works (iPhone, checked by the owner, 2026-11-15).
+
+Not verified yet: the download from a real GitHub release.
