@@ -1,6 +1,6 @@
 # A virtual camera of our own: plan
 
-Status: a plan, nothing of it is built. Written 2026-11-15, after the camera path from the phone to the PC was
+Status: phase 0 is built and works on the developer's Mac (section 4); the rest is a plan. Written 2026-11-15, after the camera path from the phone to the PC was
 measured (docs/webcam-measurements.md) and shown to work through OBS Studio's Browser source and Virtual Camera on
 Windows 10. The point of a virtual camera of our own is that Zoom, Meet, Teams, FaceTime and the like list "phoneset
 Camera" without OBS in between.
@@ -66,7 +66,15 @@ what they say about signing and approval is not in this plan.
 
 Each phase ends with something that can be seen, and the next one starts only when that is seen.
 
-0. **Does it activate here?** An Xcode project (from `macos/project.yml`) with the companion app and the extension.
+0. **Does it activate here?** _Done 2026-11-15:_ `macos/` builds with `macos/build.sh`; on macOS 26.7.1, signed with the
+   Apple Development team (Xcode's automatic signing made the provisioning profile, including the system extension
+   entitlement), the extension went to `[activated enabled]` in the category `com.apple.system_extension.cmio` from the
+   app in `/Applications`, "phoneset Camera" is in the list of cameras (`system_profiler SPCameraDataType`) and the
+   user saw the test picture in Photo Booth. The first try failed with `OSSystemExtensionErrorDomain 9` ("does not
+   appear to belong to any extension categories"): the extension's Info.plist needs `CFBundlePackageType` (`SYSX`) and
+   `NSSystemExtensionUsageDescription` besides the `CMIOExtension` key. macOS names the place to manage it: System
+   Settings, General, Login Items & Extensions, Camera Extensions. No separate approval step was seen on this Mac.
+   The plan for the phase, as written before it was done: An Xcode project (from `macos/project.yml`) with the companion app and the extension.
    The extension publishes "phoneset Camera" with a moving test pattern; the app has one button that activates it.
    Done when Photo Booth (or QuickTime Player's camera list) on the developer's Mac shows "phoneset Camera" and the
    pattern, after the user has approved the extension in System Settings. This is the gate: if the extension does not

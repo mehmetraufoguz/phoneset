@@ -1,0 +1,7 @@
+# generated from project.yml
+PhonesetCamera.xcodeproj/
+App/Info.plist
+App/PhonesetCamera.entitlements
+Extension/Info.plist
+Extension/Extension.entitlements
+build/

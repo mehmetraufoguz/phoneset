@@ -1,0 +1,68 @@
+# The Xcode project is generated from this file (`xcodegen generate`, see build.sh); only this file is in git.
+name: PhonesetCamera
+options:
+  bundleIdPrefix: com.rapp.phoneset
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: JY83GWM55C
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  PhonesetCamera:
+    type: application
+    platform: macOS
+    sources: [App]
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: phoneset Camera
+        LSMinimumSystemVersion: "13.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSCameraUsageDescription: phoneset Camera sends the picture of your phone to programs that use a camera.
+    entitlements:
+      path: App/PhonesetCamera.entitlements
+      properties:
+        com.apple.developer.system-extension.install: true
+        com.apple.security.application-groups:
+          - $(TeamIdentifierPrefix)com.rapp.phoneset.camera
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rapp.phoneset.camera
+        PRODUCT_NAME: phoneset Camera
+    dependencies:
+      - target: Extension
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Library/SystemExtensions
+  Extension:
+    type: system-extension
+    platform: macOS
+    sources: [Extension]
+    info:
+      path: Extension/Info.plist
+      properties:
+        CFBundleDisplayName: phoneset Camera
+        CFBundlePackageType: $(PRODUCT_BUNDLE_PACKAGE_TYPE)
+        LSMinimumSystemVersion: "13.0"
+        NSSystemExtensionUsageDescription: phoneset Camera shows the picture of your phone as a camera.
+        CMIOExtension:
+          CMIOExtensionMachServiceName: $(TeamIdentifierPrefix)com.rapp.phoneset.camera.extension
+    entitlements:
+      path: Extension/Extension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - $(TeamIdentifierPrefix)com.rapp.phoneset.camera
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rapp.phoneset.camera.extension
+        PRODUCT_NAME: $(PRODUCT_BUNDLE_IDENTIFIER)
+        SKIP_INSTALL: YES
