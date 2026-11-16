@@ -1,6 +1,6 @@
 # A virtual camera of our own: plan
 
-Status: phases 0, 1 and 2 are built and work on the developer's Mac (section 4); Windows and Linux are plans. Written 2026-11-15, after the camera path from the phone to the PC was
+Status: phases 0, 1 and 2 are built and work on the developer's Mac (section 4); on Windows 10 the camera with its own slate and the helper are built and tested against a stand-in for the program, not yet run with a phone (section 4, phase 3); Linux is a plan. Written 2026-11-15, after the camera path from the phone to the PC was
 measured (docs/webcam-measurements.md) and shown to work through OBS Studio's Browser source and Virtual Camera on
 Windows 10. The point of a virtual camera of our own is that Zoom, Meet, Teams, FaceTime and the like list "phoneset
 Camera" without OBS in between.
@@ -54,7 +54,7 @@ is doing). A system provides a `Backend` (probe, install, uninstall, start) and 
 | System  | Backend                                                                                                                                                                                                                                                                                                   | State                                                                                                                                                                                                                                  |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS   | `phoneset Camera.app` in `/Applications` (a camera extension and a helper without a window); the program starts it when a phone begins to send video                                                                                                                                                      | works; `phoneset camera install` puts it in place and asks macOS to turn it on, then the user allows it once in System Settings                                                                                                        |
-| Windows | none of its own yet; `phoneset camera` says to use OBS Studio's Virtual Camera                                                                                                                                                                                                                            | OBS bridge works. Own camera: a DirectShow filter on Windows 10 (a test picture works, `windows/`; not the phone's picture yet), `MFCreateVirtualCamera` on Windows 11 (build 22000 and newer), each a native component that reads `/video.frames`, behind the same commands and the same tray section |
+| Windows | none of its own yet; `phoneset camera` says to use OBS Studio's Virtual Camera                                                                                                                                                                                                                            | OBS bridge works. Own camera: a DirectShow filter on Windows 10 with a slate of its own, and `phoneset-camera.exe` that carries the phone's picture to it (`windows/`; built and tested against a stand-in for the program, **not run with a phone yet**; the program's `Backend` is still the stub), `MFCreateVirtualCamera` on Windows 11 (build 22000 and newer, not looked at); behind the same commands and the same tray section |
 | Linux   | none yet; the plan is v4l2loopback (a kernel module that makes `/dev/videoN`) fed by the program through `ffmpeg` (reading `/video.h264` or `/video.mjpg`, turning it upright with the record's rotation, writing to the device); `install` would check for the module and ffmpeg and say what is missing | not built and not tried: no Linux machine to test on                                                                                                                                                                                   |
 
 The macOS app is only a helper: its window is gone (it has none), it is started with `--background`, `--install` or
@@ -134,21 +134,50 @@ Each phase ends with something that can be seen, and the next one starts only wh
      folder, is probably wrong: Chrome's camera process ran with `--service-sandbox-type=none` on that PC); Program Files is the right
      place for a product anyway; Chrome's video capture service keeps the DLL loaded after it used the camera, so removing or replacing
      the file fails ("access denied") until that helper process is closed, and an uninstall or update has to say so; registering needs an administrator (UAC), so `phoneset camera install` on Windows has to ask for it;
-     with no sender running the camera cannot be opened at all (no output pin), so the "Waiting for your phone" slate
-     needs either a helper that keeps a sender alive or a change to the filter so that it makes its pin and the slate
-     itself (the second matches macOS, where the extension has its own slate, and works while the program is not
-     running); only an x64 DLL, so 32-bit camera programs do not see it. Not tried: the Windows Camera app, Zoom, Teams.
-   - **3b. The phone's picture.** A helper reads `/video.frames`, decodes (Media Foundation for H.264, WIC for JPEG), turns
-     it upright, fits it into 1280 x 720 and writes it through the sender API. _Not started as a product;_ a throwaway bridge
+     with no sender running softcam's own filter could not be opened at all (no output pin): fixed, see the slate below;
+     only an x64 DLL, so 32-bit camera programs do not see it. Not tried: the Windows Camera app, Zoom, Teams.
+   - **The slate in the filter.** _Built 2026-11-16_ (`windows/filter`: a patch to softcam, applied by `windows/build.ps1`,
+     and `Slate.cpp`), as the macOS extension has its own: the filter always offers its pin (one type, 1280 x 720 at 30
+     frames a second, 24-bit RGB) and shows the slate of `DeviceSource.swift` (colours, the bar that moves 12 pixels a
+     picture, the two lines of type) when no sender is there, so that an app that opens the camera sees a picture even when
+     the program and the helper are not running. A sender of 1280 x 720 that appears while an app has the camera open takes
+     over, and the slate returns when it goes. Checked with a throwaway test program that loads the DLL without
+     registering it (one process, Sample Grabber; no browser, no elevation): 30 pictures a second, 0.5 % of a core idle,
+     live 40 to 55 ms after a sender appears, the slate within about 55 ms of `scDeleteCamera` and about 550 ms after a
+     killed sender process (softcam's heartbeat timeout), a sender of another size ignored (the slate stays), no hang
+     over repeated switching; the slate's picture was looked at. **Not checked:** the registered camera in Chrome, Edge
+     and OBS, another process holding the camera while senders come and go, the Windows Camera app, Zoom, Teams, and
+     `install.ps1`/`uninstall.ps1` with this build (`windows/TESTING.md`). What softcam does that matters to the helper:
+     `scCreateCamera` fails while the filter still holds the old frame buffer (after a `scDeleteCamera` it took 0 to 36 ms
+     to work again: the helper tries at the next picture); a sender that is alive but sends nothing keeps the last picture
+     for good, softcam notices only a sender that is gone; a frame wait blocks up to 0.5 s (read in its source, not measured);
+     the camera's size is the size
+     of the sender that was there when an app opened it, else 1280 x 720.
+   - **3b. The phone's picture.** `windows/helper/phoneset-camera.exe` reads `/video.frames`, decodes (Media Foundation for
+     H.264, in its low latency mode and in software; WIC for JPEG), turns it upright, fits it into 1280 x 720 and writes it
+     through the sender API; after 1.5 s without a picture it lets the sender go, so that the camera shows its slate
+     (this works while an app has the camera open); it reports to the program once a second and logs to `camera-helper.log`.
+     _Built 2026-11-16; tested against a stand-in for the program, not run with a phone._ The stand-in (a throwaway
+     server that speaks the stream) sent a picture of four colour quarters, coded as an Android phone does, and the
+     camera's picture was compared with what it must be: all 8 rotation and mirror cases of H.264, JPEG, sizes 1920 x 1080,
+     1280 x 720, 640 x 480 and full range colours were upright and right (colours within 1), 30 a second; after silence
+     the slate came 2.0 s after the last picture and the picture 65 ms after the next record; bad records were survived,
+     a closed connection was reconnected within about 1 s, a program restarted with another port was found; 0.00 % CPU
+     idle, about 130 ms of work a second at 1080p. Against the real program (no phone) it connected and reported. **Not
+     checked:** a real phone's stream (colours, timing, bursts), the registered camera in Chrome, Edge and OBS with the
+     helper, the program's own status and tray lines (they need the Backend, 3c), 4K, latency, a GPU decoder (`windows/README.md`,
+     `windows/TESTING.md`). Found on the way, and fixed: `WinHttpReadData` waits for its whole buffer (a stream of
+     some tens of KB a second reached the helper seconds late, in a burst), `scSendFrame`'s sleep on the decoder's thread
+     piled pictures up until they were dropped. Before it, a throwaway bridge
      outside the repository (agent, ffmpeg for turning and fitting, a small C++ sender that repeats the last frame at 30 frames a
      second) showed the OPPO's JPEG picture (back and front camera) in Chrome (the owner saw it), and an H.264 frame (front
      camera, rotation 2) upright through the camera by ffmpeg. Learned: `/video.mjpg` gives nothing for an H.264 camera, so the
      helper has to read `/video.frames` (rotation per record, no restart when it changes); ffmpeg's `-fflags nobuffer -flags
      low_delay` stall a raw H.264 input after the first frame (a fault of the bridge, not of the agent or the phone); when the
-     phone or the network goes the last frame stays frozen, so the helper must send the slate itself after a while without frames.
+     phone or the network goes the last frame stays frozen, so the helper must let its sender go after a while without frames (it does).
    - **3c. A product.** A Windows `Backend` in `pc/internal/camera` (download the signed zip from the release, ask for
      administrator rights, register, remove), the tray section, `phoneset update`. Windows 11 with `MFCreateVirtualCamera`
-     is looked at separately. _Not started._
+     is looked at separately. _Not started;_ the helper has the `--quit` the program will use to stop it.
 
 ## 5. Not decided, and not part of the first version
 
