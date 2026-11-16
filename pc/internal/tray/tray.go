@@ -149,7 +149,14 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 				cameraLine.Show()
 				cameraInstall.Hide()
 				cameraRemove.Hide()
+			case camera.NotInstalled:
+				// Nothing is there to remove.
+				cameraLine.SetTitle("Camera: not installed")
+				cameraLine.Show()
+				cameraInstall.Show()
+				cameraRemove.Hide()
 			default:
+				// Waiting for approval, or switched off: it is installed, and it can be tried again or removed.
 				cameraLine.SetTitle("Camera: " + string(s.Camera.Phase))
 				cameraLine.Show()
 				cameraInstall.Show()
