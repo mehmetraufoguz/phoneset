@@ -155,7 +155,8 @@ more).
 
 Also against **the real program** built from `main` (no phone): the helper found its `control.json`, opened
 `/video.frames` and reported; `GET /api/camera` showed `running: true` and the helper's line. The program's camera
-line in `phoneset status` does not show it yet, because the program's Windows `Backend` is still the stub (phase 3c).
+line in `phoneset status` did not show it then, because the program's Windows `Backend` was still the stub; with the
+Backend of phase 3c `phoneset camera status` shows "picture running" while the helper runs.
 
 **Not checked, anything that needs a phone or a person:** a real phone's stream (the stand-in is one coded picture
 repeated every second; a real stream is a moving picture, in bursts, with the phone's own SPS/PPS and VUI), so the
@@ -209,11 +210,11 @@ a test page used the camera, so removing the file fails ("access denied") even a
 
 ## What is not done
 
-- The program's side: a Windows `Backend` in `pc/internal/camera` that installs and removes the camera, starts the helper
-  when a phone begins to send video (and quits it with `--quit`), and shows the helper's line in `phoneset status` and
-  the tray (phase 3c).
-- A release asset (`phoneset-camera-windows-amd64.zip`) with `softcam.dll`, `phoneset-camera.exe`, the licence text, and
-  its checksum.
+- The program's side is written and was run on this PC (`phoneset camera install | uninstall | status`, the helper started
+  by the program; docs/virtual-camera.md, phase 3c, says exactly what was run). Not run: the tray's camera entries,
+  `phoneset update`, a real release.
+- A release asset: `windows\release.ps1` builds `phoneset-camera-windows.zip` (+ `.sha256`; `-Upload TAG` puts it on a
+  release and in its `SHA256SUMS`); no release has it yet, and the upload itself was not run.
 - Windows 11 (build 22000 and newer): `MFCreateVirtualCamera` would be the way there; a DirectShow camera may not show
   in the Windows Camera app.
 - A GPU decoder (a software decoder in its low latency mode is used), and a 4K picture was not tried.

@@ -183,7 +183,20 @@ Each phase ends with something that can be seen, and the next one starts only wh
      low_delay` stall a raw H.264 input after the first frame (a fault of the bridge, not of the agent or the phone); when the
      phone or the network goes the last frame stays frozen, so the helper must let its sender go after a while without frames (it does).
    - **3c. A product.** _Written 2026-11-16, cross-compiled and vetted for Windows (amd64 and arm64), macOS and Linux, its
-     zip handling tested by unit tests that stay local (the repository does not commit test files); **not yet run on a Windows PC**._ `pc/internal/camera/backend_windows.go` is the Windows
+     zip handling tested by unit tests that stay local (the repository does not commit test files). **Run on a Windows 10 PC
+     (amd64, 2026-11-16, with an owner answering each UAC window):** `camera status` before and after; `camera install` from
+     the files next to the program (one UAC window; folder, registry, ACL and `version.txt` checked, the slate in Chrome);
+     the helper started by the program itself when a phone turned its camera on (path under Program Files, no window, the
+     picture in Chrome) and left running when the program quit; `camera install --force` while Chrome held the camera (one
+     UAC window, the old DLL renamed aside, a new tab saw the camera); a UAC window answered No (friendly message, nothing
+     changed); `camera uninstall` while Chrome held the DLL (unregistered, `chrome.exe` named, exit 1); `windows\release.ps1`
+     without `-Upload` (the zip has four flat entries); the download path against a **local stand-in for the GitHub API**
+     (`PHONESET_UPDATE_API`): a good `SHA256SUMS` installed it (version.txt `v9.9.9`, both licence texts copied), a wrong line
+     and a missing line were both refused with nothing changed. Found and fixed on the way: a second `uninstall` after a held
+     DLL said "not installed" and left the folder with `softcam.dll.old-*`; `windows/release/` was not in `.gitignore`.
+     **Not run:** the tray's "Install the camera…" and "Remove the camera", `phoneset update`, `release.ps1 -Upload` and a
+     download from a real GitHub release, arm64, a user who answers the UAC window with another account's credentials, Windows
+     11._ `pc/internal/camera/backend_windows.go` is the Windows
      `Backend`: `Probe` reads the camera's class id in HKLM (the 64-bit view) and the helper's named mutex, `Install` takes
      the files from next to the program (a build from `windows\build.ps1`), else keeps an installed camera, else downloads
      `phoneset-camera-windows.zip` from the latest release, checks it against `SHA256SUMS` (`update.Client.Fetch`) and unpacks
