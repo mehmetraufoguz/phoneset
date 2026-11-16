@@ -121,7 +121,7 @@ Each phase ends with something that can be seen, and the next one starts only wh
    The zip is made by `macos/release.sh` (archive, Developer ID export, notarize, staple, zip; `--upload TAG` adds it to
    an existing release and to its `SHA256SUMS`), by hand on the owner's Mac. Checked: the notarized build installed from
    a download (a local fake release), macOS took its extension without a new approval, and the owner saw the iPhone's
-   picture through it. Not checked: the download from a real GitHub release.
+   picture through it. **Published 2026-11-16 with v0.3.0** (`macos/release.sh --version 0.3.0 --upload v0.3.0`: signed with the Developer ID certificate, notarized (Accepted), stapled, accepted by Gatekeeper as "Notarized Developer ID"; its line is in the release's `SHA256SUMS`): `phoneset camera install --force` on the developer's Mac downloaded it from the real release, checked it (`checksum ok`), put it in `/Applications` and macOS activated the new extension (0.3.0/1794854354, `[activated enabled]`) with no new approval; `phoneset camera status` said ready.
 3. **Windows.** Windows 11 (build 22000 and newer) has `MFCreateVirtualCamera`; Windows 10 needs a DirectShow filter
    registered by an administrator; both need a native (C++) component that reads `/video.frames`. Until it is done
    OBS's Virtual Camera is the way on Windows (it works, see the measurements report).
