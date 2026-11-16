@@ -163,7 +163,13 @@ Each phase ends with something that can be seen, and the next one starts only wh
      1280 x 720, 640 x 480 and full range colours were upright and right (colours within 1), 30 a second; after silence
      the slate came 2.0 s after the last picture and the picture 65 ms after the next record; bad records were survived,
      a closed connection was reconnected within about 1 s, a program restarted with another port was found; 0.00 % CPU
-     idle, about 130 ms of work a second at 1080p. Against the real program (no phone) it connected and reported. **Not
+     idle. Against the real program (no phone) it connected and reported. **Cost, measured with the OPPO's real stream
+     (2026-11-16):** the first build took 239 to 278 % of one core (15 to 17 % of a 16-thread PC). Per-thread CPU showed the
+     cause: the stream was 2688 x 1512 (not 1080p) H.264, and about 14 spinning workers of the PPL pool (`parallel_for`)
+     burned about 1.5 s of CPU a second on a few tens of milliseconds of work, on top of the software decoder's 0.5 to
+     0.9 s. Fixed by dropping the pool and turning only the output's pixels from NV12 to BGR in one pass: 81 to 85 % of
+     one core, 5.1 to 5.3 % of the PC; a decoder thread count did not help, the hardware decoder is not tried
+     (`windows/README.md`, "The helper's cost on a real stream"). **Not
      checked:** a real phone's stream (colours, timing, bursts), the registered camera in Chrome, Edge and OBS with the
      helper, the program's own status and tray lines (they need the Backend, 3c), 4K, latency, a GPU decoder (`windows/README.md`,
      `windows/TESTING.md`).

@@ -71,10 +71,10 @@ gets, to compare with.
 | B8 | With a picture on the page: `Stop-Process -Name phoneset-camera -Force`, then `Start-Process windows\dist\phoneset-camera.exe -ArgumentList '--config-dir','C:\phoneset-test'` | The slate within about a second of the kill (not a frozen picture); the picture back within a few seconds of the start, **without opening the camera on the page again**. |
 | B9 | The picture in Chrome, Edge and OBS (and, bonus, Camera app, Zoom, Teams) at the same time or one after the other | The picture in each. Write which ones were tried. |
 | B10 | Latency: wave a hand in front of the phone; watch the program's own page next to the Chrome page | The virtual camera is not behind the program's own page by more than a few frames. Write how it feels (and, if you can, the delay in milliseconds from a video of the two screens). |
-| B11 | CPU: Task Manager, Details, `phoneset-camera.exe` and the browser, in h264 1080p and in jpeg 720p | The helper: a few percent of the whole PC at most (the log's `busy=` is its milliseconds of work in a second: about 130 for 1080p on the stand-in). Write the numbers. |
+| B11 | CPU: Task Manager, Details, `phoneset-camera.exe` and the browser, in h264 1080p and in jpeg 720p | The helper: about 5 % of the whole PC with a phone's 2688 x 1512 H.264 stream (the OPPO's "1080p" gave that size), less at real 1080p, a few percent in jpeg (the log's `busy=` is its milliseconds of work in a second; start the helper with `--profile` to get the time per stage and the CPU per thread in the log). Write the numbers. |
 
 If you take numbers, use the lines of `docs/webcam-measurements.md` (appendix A.8): for example
-`back h264 requested 1920x1080@30 | 30 fps in Chrome | helper busy 130 ms a second, 1 % CPU | measured 20 s | feel: no lag`.
+`back h264 requested 1920x1080@30, arrived 2688x1512 | 30 fps in Chrome | helper busy 580 ms a second, 5 % of the PC | measured 20 s | feel: no lag`.
 
 ## C. Clean up
 

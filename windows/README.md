@@ -123,7 +123,35 @@ The camera's picture was compared with what it must be (colour at the middle of 
 | the connection closed by the program (3 times)                         | reconnected within about 1 s each time                                                         |
 | the program restarted with another port and token                      | found the new `control.json`, connected                                                        |
 | a second helper; `--quit`; `--quit` with none running                  | exit code 3; helper gone, 0; 1                                                                 |
-| the helper's cost                                                      | idle: 0.00 % CPU (below what could be measured), 8 to 11 MB; 1080p H.264: about 130 ms of work a second (13 % of one core), the decoder 3 to 5 ms and the turn and fit 1 to 2 ms a picture on this 16-thread PC |
+| the helper's cost                                                      | idle: 0.00 % CPU (below what could be measured), 8 to 11 MB; the stand-in's 1080p H.264 picture: 133 ms of work a second (upright) to 233 ms (across), on this 16-thread PC. A real phone's stream costs more: see the next section |
+
+**The helper's cost on a real stream (2026-11-16, the OPPO's back camera, H.264, phone across).** The first build used
+239 to 278 % of one core (15 to 17 % of this 16-thread PC), well above what the stand-in showed. Measured with
+`phoneset-camera.exe --profile` (a line a second in the log: wall time of each stage, the stream's bit rate and SPS, and the
+CPU time of every thread of the process):
+
+- The stream was **2688 x 1512** (4.06 megapixels, twice 1080p) although the app was set to 1080p: High profile, level
+  5.0, 11 to 13.6 Mbit/s, 31 to 33 pictures a second, a key frame about every second. The stand-in's pictures are 1080p
+  and static, which is why it looked cheaper.
+- About 14 worker threads of the exe's own PPL pool (`parallel_for`, in the NV12 conversion and in compose) burned 60 to
+  170 ms each every second, about 1.5 s of CPU in total, although the work they were given was 73 ms (convert) plus
+  53 ms (compose) of wall time: the pool's workers spin while they wait for the next picture. The Media Foundation
+  software decoder (`msmpeg2vdec.dll`, about 10 threads) was 0.5 to 0.9 s of CPU a second. The sender thread costs nothing
+  (`scSendFrame` sleeps; its 600 to 1000 ms of wall time is waiting).
+- With plain loops instead of the pool: 127 % of one core (7.9 % of the PC), but the whole-picture NV12 to BGRA
+  conversion (374 ms a second) and the fit (282 ms) took the thread to 28 pictures a second.
+
+What was changed: no pool, and H.264 stays NV12 (the visible part is copied out of the decoder's buffer) until compose
+turns **only the pixels of the 1280 x 720 picture** into BGR in one pass with the turn, the mirror and the scaling
+(integer tables per picture; Y is interpolated, the chroma is the nearest sample). Result on the same stream: **81 to 85 %
+of one core, 5.1 to 5.3 % of the PC**, 63 MB, 30 pictures written a second, none dropped; about 165 ms of compose, 28 ms of
+copying and about 450 ms of decoder wall time a second. What did **not** help: `CODECAPI_AVDecNumWorkerThreads` of 1, 2
+or 4 (81 to 85 % in each case, the decoder seems to ignore it). What is not done: the Direct3D 11 hardware decoder, which
+would take most of the decoder's 0.5 s (this PC has an NVIDIA GPU; not tried). The decoder and the pass cost about in
+proportion to the pixels, so at 1080p they should be about half (not measured on a phone). The stand-in's pixel check of
+all rotation and mirror cases, JPEG and the size changes passes with the new code (colours within 1); a real phone's
+picture after this change was **not looked at** beyond one frame whose colours were right (the owner chose not to test
+more).
 
 Also against **the real program** built from `main` (no phone): the helper found its `control.json`, opened
 `/video.frames` and reported; `GET /api/camera` showed `running: true` and the helper's line. The program's camera
