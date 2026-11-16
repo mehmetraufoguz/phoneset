@@ -182,9 +182,24 @@ Each phase ends with something that can be seen, and the next one starts only wh
      helper has to read `/video.frames` (rotation per record, no restart when it changes); ffmpeg's `-fflags nobuffer -flags
      low_delay` stall a raw H.264 input after the first frame (a fault of the bridge, not of the agent or the phone); when the
      phone or the network goes the last frame stays frozen, so the helper must let its sender go after a while without frames (it does).
-   - **3c. A product.** A Windows `Backend` in `pc/internal/camera` (download the signed zip from the release, ask for
-     administrator rights, register, remove), the tray section, `phoneset update`. Windows 11 with `MFCreateVirtualCamera`
-     is looked at separately. _Not started;_ the helper has the `--quit` the program will use to stop it.
+   - **3c. A product.** _Written 2026-11-16, cross-compiled and vetted for Windows (amd64 and arm64), macOS and Linux, its
+     zip handling unit-tested; **not yet run on a Windows PC**._ `pc/internal/camera/backend_windows.go` is the Windows
+     `Backend`: `Probe` reads the camera's class id in HKLM (the 64-bit view) and the helper's named mutex, `Install` takes
+     the files from next to the program (a build from `windows\build.ps1`), else keeps an installed camera, else downloads
+     `phoneset-camera-windows.zip` from the latest release, checks it against `SHA256SUMS` (`update.Client.Fetch`) and unpacks
+     it with limits (no paths out of the folder, no links, few and small files, `winpkg.go`), then starts the program again
+     with administrator rights (`ShellExecute` with the verb "runas": the UAC window) as `phoneset camera _elevated install`,
+     which copies to `C:\Program Files\phoneset\camera`, registers with `regsvr32` and checks the registry. A DLL a browser
+     still has loaded cannot be overwritten or deleted but can be renamed, so an update moves the old copy aside instead of
+     waiting for the browser; `uninstall` unregisters (programs stop listing the camera) and, when a program still holds the
+     file, says which one. `Start` starts the helper (hidden, detached) when a phone begins to send video, with the program's
+     `--config-dir`; the helper is not stopped when the program quits (it costs nothing idle). `phoneset update` refreshes it
+     (`camera install --force`) and the tray's camera section works through the same `Backend`. The zip is made by
+     `windows\release.ps1` (`-Upload TAG` adds it to a release and to its `SHA256SUMS`, like `macos/release.sh`); **nothing in
+     it is signed** (a DirectShow filter needs no signature; an antivirus may still look at it). The elevated step is a second
+     copy of the program run after a UAC prompt that names `phoneset.exe`; like any program that elevates itself it does what
+     its arguments say, so it is only started by the program itself. Not done: Windows 11 with `MFCreateVirtualCamera` (looked at
+     separately), a code-signing certificate.
 
 ## 5. Not decided, and not part of the first version
 
