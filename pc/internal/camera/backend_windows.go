@@ -137,7 +137,9 @@ func (w *windowsCamera) source(ctx context.Context, o InstallOptions) (dir, vers
 
 func (w *windowsCamera) Uninstall() error {
 	if _, registered := registeredDLL(); !registered {
-		if dir, err := installDir(); err != nil || !fileExists(filepath.Join(dir, dllName)) {
+		// Not registered, but the folder may still be there with what a browser held while an earlier uninstall ran
+		// (softcam.dll.old-*): that is for this uninstall to remove.
+		if dir, err := installDir(); err != nil || !dirExists(dir) {
 			return errors.New("the camera is not installed")
 		}
 	}
@@ -206,6 +208,11 @@ func installDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(pf, "phoneset", "camera"), nil
+}
+
+func dirExists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.IsDir()
 }
 
 func fileExists(path string) bool {
