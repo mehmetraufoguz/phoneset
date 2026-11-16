@@ -7,6 +7,8 @@ web-build/
 expo-env.d.ts
 pc/bin/
 *.exe
+# windows\release.ps1 writes the camera zip here
+windows/release/
 
 # generated native projects (Expo prebuild)
 mobile/ios/
