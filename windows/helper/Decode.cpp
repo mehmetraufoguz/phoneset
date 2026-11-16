@@ -1,9 +1,10 @@
 #include "Decode.h"
 
+#include "Profile.h"
+
 #include <codecapi.h>
 #include <mferror.h>
 #include <wmcodecdsp.h>
-#include <ppl.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -20,11 +21,11 @@
 
 namespace helper {
 
+int decoderThreads = 0;
+
 namespace {
 
 constexpr int MAX_DIMENSION = 8192;
-
-inline int clamp255(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
 
 }
 
@@ -96,6 +97,7 @@ bool Decoder::decodeJpeg(const Record& record, Image* out)
         m_failures++;
         return false;
     }
+    out->nv12 = false;
     out->width = (int)width;
     out->height = (int)height;
     out->bgra.resize((size_t)width * height * 4);
@@ -140,6 +142,14 @@ bool Decoder::makeDecoder(int width, int height)
         on.vt = VT_BOOL;
         on.boolVal = VARIANT_TRUE;
         codec->SetValue(&CODECAPI_AVLowLatencyMode, &on);
+        if (decoderThreads > 0)
+        {
+            VARIANT threads;
+            VariantInit(&threads);
+            threads.vt = VT_UI4;
+            threads.ulVal = (ULONG)decoderThreads;
+            codec->SetValue(&CODECAPI_AVDecNumWorkerThreads, &threads);
+        }
     }
 
     Com<IMFMediaType> input;
@@ -330,9 +340,11 @@ bool Decoder::takeOutputs(Image* out)
     return got;
 }
 
-/// NV12 to BGRA, the visible part only.
+/// Copies the visible part of the decoder's NV12 picture (the decoder's buffer is used again for the next one). The colours
+/// are turned into BGR later, in compose, for the pixels of the camera's picture only.
 bool Decoder::convert(IMFSample* sample, Image* out)
 {
+    profile::Scope timed(profile::Convert);
     Com<IMFMediaBuffer> buffer;
     if (FAILED(sample->ConvertToContiguousBuffer(&buffer))) return false;
     BYTE* data = nullptr;
@@ -340,43 +352,34 @@ bool Decoder::convert(IMFSample* sample, Image* out)
     if (FAILED(buffer->Lock(&data, nullptr, &length))) return false;
 
     const int stride = m_stride;
-    const int left = m_visible.left, top = m_visible.top;
-    const int width = m_visible.right - m_visible.left, height = m_visible.bottom - m_visible.top;
+    const int left = m_visible.left & ~1, top = m_visible.top & ~1;         // the chroma pairs start on even ones
+    const int width = m_visible.right - left, height = m_visible.bottom - top;
     // The chroma plane starts behind the luma plane, whose height may be padded (1088 for 1080).
     const int slice_height = stride > 0 ? (int)((long long)length * 2 / 3 / stride) : 0;
-    bool ok = width > 0 && height > 0 && stride >= left + width && slice_height >= top + height;
+    const int chroma_width = (std::min)((width + 1) & ~1, stride - left);
+    bool ok = width > 0 && height > 0 && chroma_width >= width && stride >= left + width && slice_height >= top + height;
     if (ok)
     {
         const BYTE* luma = data;
         const BYTE* chroma = data + (size_t)stride * slice_height;
         out->width = width;
         out->height = height;
-        out->bgra.resize((size_t)width * height * 4);
-        BYTE* pixels = out->bgra.data();
-        const bool full = m_full_range, bt709 = m_bt709;
-        // Fixed point (8 bits): the coefficients of the four cases
-        const int cr = bt709 ? (full ? 403 : 459) : (full ? 359 : 409);
-        const int cgu = bt709 ? (full ? 48 : 55) : (full ? 88 : 100);
-        const int cgv = bt709 ? (full ? 120 : 136) : (full ? 183 : 208);
-        const int cb = bt709 ? (full ? 475 : 541) : (full ? 454 : 516);
-        const int ys = full ? 256 : 298;
-        const int yo = full ? 0 : 16;
-        concurrency::parallel_for(0, height, [&](int y) {
-            const BYTE* yr = luma + (size_t)(top + y) * stride + left;
-            const BYTE* cr_row = chroma + (size_t)((top + y) >> 1) * stride;
-            BYTE* o = pixels + (size_t)y * width * 4;
-            for (int x = 0; x < width; x++)
-            {
-                int pair = (left + x) & ~1;
-                int c = ys * (yr[x] - yo);
-                int d = cr_row[pair] - 128;
-                int e = cr_row[pair + 1] - 128;
-                o[4 * x + 0] = (BYTE)clamp255((c + cb * d + 128) >> 8);
-                o[4 * x + 1] = (BYTE)clamp255((c - cgu * d - cgv * e + 128) >> 8);
-                o[4 * x + 2] = (BYTE)clamp255((c + cr * e + 128) >> 8);
-                o[4 * x + 3] = 255;
-            }
-        });
+        out->nv12 = true;
+        out->chroma_stride = chroma_width;
+        out->full_range = m_full_range;
+        out->bt709 = m_bt709;
+        const int chroma_rows = (height + 1) / 2;
+        out->yuv.resize((size_t)width * height + (size_t)chroma_width * chroma_rows);
+        BYTE* dst = out->yuv.data();
+        for (int y = 0; y < height; y++)
+        {
+            std::memcpy(dst + (size_t)y * width, luma + (size_t)(top + y) * stride + left, (size_t)width);
+        }
+        BYTE* dst_chroma = dst + (size_t)width * height;
+        for (int y = 0; y < chroma_rows; y++)
+        {
+            std::memcpy(dst_chroma + (size_t)y * chroma_width, chroma + (size_t)((top >> 1) + y) * stride + left, (size_t)chroma_width);
+        }
     }
     buffer->Unlock();
     return ok;

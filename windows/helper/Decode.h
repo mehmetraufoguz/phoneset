@@ -17,6 +17,9 @@
 namespace helper {
 
 
+/// How many worker threads the software H.264 decoder may use (0: its own choice). --decoder-threads, to try values.
+extern int decoderThreads;
+
 /// Not thread safe: use it from one thread that has called CoInitializeEx and MFStartup.
 class Decoder
 {

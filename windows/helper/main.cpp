@@ -5,6 +5,9 @@
 //
 //   phoneset-camera.exe [--config-dir <folder of the phoneset program's control.json>]
 //   phoneset-camera.exe --quit      asks the running helper to quit (it signals the event below and waits for it)
+//   phoneset-camera.exe --profile   also writes, once a second, the stream's bit rate and SPS, the wall time of each stage and
+//                                   the CPU time of every thread to the log (to see where the CPU goes)
+//   phoneset-camera.exe --decoder-threads N   asks the H.264 decoder for N worker threads (measured: no effect here)
 //
 // No window, no console. One instance per user session (a named mutex). It never quits by itself: not when the program
 // restarts, not when the phone goes away. Once a second it tells the program what is going on (POST /api/camera/report)
@@ -28,6 +31,7 @@
 #include "Camera.h"
 #include "Compose.h"
 #include "Decode.h"
+#include "Profile.h"
 #include "Types.h"
 
 using namespace helper;
@@ -97,7 +101,7 @@ class Log
 class Bridge
 {
  public:
-    Bridge(const std::wstring& dir, Log* log) : m_link(dir), m_log(log) {}
+    Bridge(const std::wstring& dir, Log* log, bool profile) : m_link(dir), m_log(log), m_profile(profile) {}
 
     void start()
     {
@@ -194,6 +198,17 @@ class Bridge
                           m_camera.created(), m_camera.createFailures(), m_link.bad(), m_failures_total(), m_busy_ms.exchange(0),
                           m_longest_ms.exchange(0), lastDecodeError().c_str());
             m_log->line(std::string(counters) + " | " + text);
+            if (m_profile && received)
+            {
+                char stream[200];
+                std::snprintf(stream, sizeof stream, "profile stream: %lld kbit/s, %lld records, %lld key frames, profile_idc=%d constraint=0x%02x level_idc=%d",
+                              m_bytes.load() * 8 / 1000, received, m_keys.load(), m_profile_idc.load(), m_constraint.load(),
+                              m_level_idc.load());
+                m_log->line(stream);
+                m_log->line(profile::report());
+            }
+            m_bytes = 0;
+            m_keys = 0;
             if (!m_decoder_note.empty() && m_decoder_note != m_last_note)
             {
                 m_log->line("h264 decoder: " + m_decoder_note);
@@ -206,6 +221,7 @@ class Bridge
  private:
     AgentLink               m_link;
     Log*                    m_log;
+    bool                    m_profile;
     CameraSender            m_camera;
     std::thread             m_worker;
     std::thread             m_sender;
@@ -247,6 +263,31 @@ class Bridge
     std::atomic<long long>  m_decode_failures{0};
     std::atomic<long long>  m_busy_ms{0}, m_longest_ms{0};     // time spent on records in the last second, and the longest one
 
+    // What the stream is like (for the profile line): bytes and key frames since the last tick, and the SPS of the last key frame.
+    std::atomic<long long>  m_bytes{0}, m_keys{0};
+    std::atomic<int>        m_profile_idc{0}, m_level_idc{0}, m_constraint{0};
+
+    /// Reads profile and level out of the SPS in a key frame (Annex B: start code, NAL header 0x67, then profile_idc,
+    /// constraint flags, level_idc).
+    void noteStream(const Record& record)
+    {
+        const std::vector<std::uint8_t>& p = record.payload;
+        for (size_t i = 0; i + 7 < p.size() && i < 256; i++)
+        {
+            if (p[i] == 0 && p[i + 1] == 0 && (p[i + 2] == 1 || (p[i + 2] == 0 && p[i + 3] == 1)))
+            {
+                size_t n = i + (p[i + 2] == 1 ? 3 : 4);
+                if ((p[n] & 0x1f) == 7)
+                {
+                    m_profile_idc = p[n + 1];
+                    m_constraint = p[n + 2];
+                    m_level_idc = p[n + 3];
+                    return;
+                }
+            }
+        }
+    }
+
     long long m_failures_total() const { return m_decode_failures.load(); }
     std::string lastDecodeError()
     {
@@ -264,6 +305,12 @@ class Bridge
     void receive(Record&& record)
     {
         m_received++;
+        m_bytes += (long long)record.payload.size();
+        if (record.key)
+        {
+            m_keys++;
+            if (record.codec == Record::H264) noteStream(record);
+        }
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_queue.push_back(std::move(record));
@@ -294,6 +341,7 @@ class Bridge
 
     void reportLoop()
     {
+        profile::nameThisThread(L"report");
         for (;;)
         {
             Control control;
@@ -314,6 +362,7 @@ class Bridge
 
     void sendLoop()
     {
+        profile::nameThisThread(L"send");
         std::vector<std::uint8_t> frame;
         for (;;)
         {
@@ -324,6 +373,7 @@ class Bridge
                 frame.swap(m_latest);
                 m_fresh = false;
             }
+            profile::Scope timed(profile::Send);        // scSendFrame sleeps to keep the frame rate: mostly waiting, not CPU
             if (frame.size() == (size_t)OUT_WIDTH * OUT_HEIGHT * 3 && m_camera.write(frame.data()))
             {
                 m_written++;
@@ -334,6 +384,7 @@ class Bridge
 
     void work()
     {
+        profile::nameThisThread(L"work");
         CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         Decoder decoder;
         Image image;
@@ -364,13 +415,22 @@ class Bridge
             } timer{&m_busy_ms, &m_longest_ms, started};
             try
             {
-                if (decoder.decode(record, &image))
+                bool decoded;
+                {
+                    profile::Scope timed(profile::Decode);      // for H.264 this includes the conversion to BGRA (Convert)
+                    decoded = decoder.decode(record, &image);
+                }
+                if (decoded)
                 {
                     m_decoded++;
-                    compose(image, record.rotation, record.mirror, &frame);
+                    {
+                        profile::Scope timed(profile::Compose);
+                        compose(image, record.rotation, record.mirror, &frame);
+                    }
                     m_composed++;
                     {
                         // Hand the picture to the sender thread; one that was not sent yet is replaced (30 a second at most).
+                        profile::Scope timed(profile::Copy);
                         std::lock_guard<std::mutex> lock(m_out_mutex);
                         m_latest.assign(frame.begin(), frame.end());
                         m_fresh = true;
@@ -422,14 +482,16 @@ int quitRunningHelper()
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 {
     std::wstring dir = defaultConfigDir();
-    bool quit = false;
+    bool quit = false, profiling = false;
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     for (int i = 1; argv && i < argc; i++)
     {
         std::wstring arg = argv[i];
         if (arg == L"--quit") quit = true;
+        else if (arg == L"--profile") profiling = true;      // the log gets the time per stage and the CPU per thread each second
         else if (arg == L"--config-dir" && i + 1 < argc) dir = argv[++i];
+        else if (arg == L"--decoder-threads" && i + 1 < argc) decoderThreads = _wtoi(argv[++i]);
     }
     if (argv) LocalFree(argv);
 
@@ -445,7 +507,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
     {
         Log log(dir.empty() ? std::wstring() : dir + L"\\camera-helper.log");
         log.line("started");
-        Bridge bridge(dir, &log);
+        Bridge bridge(dir, &log, profiling);
         bridge.start();
         // The beat of the program: once a second until asked to quit.
         while (WaitForSingleObject(quit_event, 1000) == WAIT_TIMEOUT) bridge.tick();
