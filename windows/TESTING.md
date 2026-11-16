@@ -13,7 +13,7 @@ open them again after.
 In a normal PowerShell, in the repository:
 
 ```powershell
-cd C:\Users\mehme\githubProjects\phoneset
+cd $HOME\githubProjects\phoneset
 git pull --ff-only
 windows\build.ps1
 cd pc
