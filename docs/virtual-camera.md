@@ -183,7 +183,7 @@ Each phase ends with something that can be seen, and the next one starts only wh
      low_delay` stall a raw H.264 input after the first frame (a fault of the bridge, not of the agent or the phone); when the
      phone or the network goes the last frame stays frozen, so the helper must let its sender go after a while without frames (it does).
    - **3c. A product.** _Written 2026-11-16, cross-compiled and vetted for Windows (amd64 and arm64), macOS and Linux, its
-     zip handling unit-tested; **not yet run on a Windows PC**._ `pc/internal/camera/backend_windows.go` is the Windows
+     zip handling tested by unit tests that stay local (the repository does not commit test files); **not yet run on a Windows PC**._ `pc/internal/camera/backend_windows.go` is the Windows
      `Backend`: `Probe` reads the camera's class id in HKLM (the 64-bit view) and the helper's named mutex, `Install` takes
      the files from next to the program (a build from `windows\build.ps1`), else keeps an installed camera, else downloads
      `phoneset-camera-windows.zip` from the latest release, checks it against `SHA256SUMS` (`update.Client.Fetch`) and unpacks
