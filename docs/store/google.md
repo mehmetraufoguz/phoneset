@@ -115,12 +115,16 @@ release build also works (`expo prebuild`, JDK 17, `gradlew bundleRelease`) but 
 1. Developer account: US$25, identity verification, and the device check with a real Android 10+ phone (the OPPO,
    Android 11, qualifies) through the Play Console app.
 2. Create the app: name `phoneset`, English (United States), App, **free or paid** (decide first: the App Store
-   price is US$0.99; a free app cannot later be made paid, **unverified**), accept the declarations.
+   price is US$0.99; Google's price page, read 2026-11-16: a paid app can be made free later, but "once your app has
+   been offered for free, the app can't be changed to paid"), accept the declarations.
 3. App content (answers below). Internal testing may start before all of it is done; production needs all of it.
 4. Testing > Internal testing > Testers: make an email list, add the testers' Google accounts, create a release,
    upload the `.aab`, roll it out, copy the link and open it on the phone.
-5. Later, for production: a closed test (the personal-account rule: 12 testers for 14 days, **unverified** for
-   internal), then "Apply for production".
+5. Later, for production: a closed test, then "Apply for production access" on the Dashboard. Google's page for
+   personal accounts created after 2023-11-13 (read 2026-11-16): at least 12 testers opted in continuously for 14
+   days when you apply; internal testing is optional and can start before app setup is complete; a closed test can
+   start after setup is complete; Production stays disabled until then. The page is about personal accounts and does
+   not say whether organisation accounts are exempt; which kind the account is decides this.
 
 ## App content answers (draft, the owner decides)
 
@@ -210,3 +214,45 @@ The app and the computer program are open source (MIT license): github.com/mehme
   the background (**unverified** that it is needed).
 - If "Pair with <PC>" says "Couldn't reach the PC", type the PC's address under "Can't see your PC?". The PC program
   from the commit that fixes this advertises only reachable addresses.
+
+---
+
+# Google Play: the account exists (2026-11-16)
+
+The developer account was bought. What is left, who does it, and what Google's pages said when read today (they
+change; the numbers are in the pages named, not in this file's memory).
+
+## The owner, in Play Console and on the phone
+
+1. Finish the account: identity verification, then the device check with the OPPO through the Play Console mobile app
+   (a real, non-rooted Android 10+ phone). Note whether the account is **personal or organisation**: the 12-tester
+   rule below is written for personal accounts.
+2. Payments profile (merchant account) in Settings: needed for a paid app and for subscriptions. Turkey supports
+   merchant registration (Google's supported-locations page); tax information is asked there.
+3. Create the app (step 2 above). **Free or paid is the one decision that cannot be undone in one direction**: free
+   can never become paid. Recommendation in the owner's private pricing note.
+4. `cd mobile && npx eas-cli login`, then `npx eas-cli build --platform android --profile production`; accept the
+   generated keystore (it is the upload key; back it up with `npx eas-cli credentials`, never commit it). Upload the
+   `.aab` to Testing > Internal testing by hand. Internal testing needs no finished app setup.
+5. App content answers: from the drafts above, after the owner has read them. The privacy policy on the website must
+   get the camera paragraph first (production needs the link; the live text says the camera is only for the QR screen).
+6. Closed test for production access: 12 testers opted in for 14 days in a row (see step 5 of "Play Console, in
+   order"). Start the 14 days as soon as the setup allows, it is the longest wait.
+
+## Service fees (Google's page, read 2026-11-16)
+
+Subscriptions: 10% plus a 5% billing fee (15%), new and existing installs, in the US, UK, EEA, Australia and Japan,
+and 15% in the other markets. One-time sales and the up-front price of a paid app: 20% (new installs) or 25%
+(existing installs) plus the 5% billing fee in those regions, 15% on the first US$1M a year elsewhere; reduced by the
+Apps Experience programme (not checked whether it applies). Apple's 30% / 15% is in `apple.md` and its sources.
+
+## What stays open in the repository
+
+- The camera permission text in `mobile/app.json` (`expo-camera`) still says the camera is for scanning the QR code.
+  It must say it can also send the picture to the PC before a build that ships the camera is submitted, on both
+  stores.
+- Whether the "Camera (experimental)" section stays visible on Android (asked 2026-11-11, unanswered). What the
+  OPPO measured is in `docs/webcam-measurements.md` (H.264 reached 4K at 30 fps; front-camera JPEG at 720p only
+  about 6 fps).
+- The foreground service demo video (microphone) is not recorded; Google wants a link to it on the declaration form.
+- Subscriptions: no billing code exists, so there is nothing for a Play Billing product to attach to yet.
