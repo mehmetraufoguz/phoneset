@@ -262,8 +262,10 @@ func applyUninstall() error {
 	if registered {
 		dll = reg // what is registered is what to unregister
 	}
+	// Only a camera that is registered is unregistered: after an uninstall that could not delete the file (a browser held
+	// it) the registration is gone already, and the second run only has the folder left to remove.
 	switch {
-	case fileExists(dll):
+	case registered && fileExists(dll):
 		if err := regsvr32(true, dll); err != nil {
 			return err
 		}
