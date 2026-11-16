@@ -194,9 +194,12 @@ Each phase ends with something that can be seen, and the next one starts only wh
      (`PHONESET_UPDATE_API`): a good `SHA256SUMS` installed it (version.txt `v9.9.9`, both licence texts copied), a wrong line
      and a missing line were both refused with nothing changed. Found and fixed on the way: a second `uninstall` after a held
      DLL said "not installed" and left the folder with `softcam.dll.old-*`; `windows/release/` was not in `.gitignore`.
-     **Not run:** the tray's "Install the camera…" and "Remove the camera", `phoneset update`, `release.ps1 -Upload` and a
-     download from a real GitHub release, arm64, a user who answers the UAC window with another account's credentials, Windows
-     11._ `pc/internal/camera/backend_windows.go` is the Windows
+     **Published and run from the real release (2026-11-16):** `windows\release.ps1 -Upload v0.3.0` put the zip on the v0.3.0 release
+     (150756 bytes, SHA-256 `5531d20e…925b`, its line in `SHA256SUMS`, unsigned); then on the Windows 10 PC `phoneset camera install --force`
+     with no override of the update address downloaded it from GitHub (`checksum ok`, `release v0.3.0`), one UAC window, `version.txt`
+     `v0.3.0`, `camera status` ready and the slate in Chrome; `camera uninstall` (Chrome closed) removed the registration and the folder
+     (`C:\Program Files\phoneset` gone). **Not run:** the tray's "Install the camera…" and "Remove the camera", `phoneset update`, arm64, a user
+     who answers the UAC window with another account's credentials, Windows 11._ `pc/internal/camera/backend_windows.go` is the Windows
      `Backend`: `Probe` reads the camera's class id in HKLM (the 64-bit view) and the helper's named mutex, `Install` takes
      the files from next to the program (a build from `windows\build.ps1`), else keeps an installed camera, else downloads
      `phoneset-camera-windows.zip` from the latest release, checks it against `SHA256SUMS` (`update.Client.Fetch`) and unpacks

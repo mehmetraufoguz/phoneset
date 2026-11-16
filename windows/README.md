@@ -212,9 +212,10 @@ a test page used the camera, so removing the file fails ("access denied") even a
 
 - The program's side is written and was run on this PC (`phoneset camera install | uninstall | status`, the helper started
   by the program; docs/virtual-camera.md, phase 3c, says exactly what was run). Not run: the tray's camera entries,
-  `phoneset update`, a real release.
-- A release asset: `windows\release.ps1` builds `phoneset-camera-windows.zip` (+ `.sha256`; `-Upload TAG` puts it on a
-  release and in its `SHA256SUMS`); no release has it yet, and the upload itself was not run.
+  `phoneset update`.
+- The release asset: `windows\release.ps1` builds `phoneset-camera-windows.zip` (+ `.sha256`; `-Upload TAG` puts it on a
+  release and in its `SHA256SUMS`). Done for v0.3.0 (2026-11-16), and `phoneset camera install` was run from that real release on
+  this PC (checksum ok, one UAC window, ready; uninstall removed it). The zip is not signed.
 - Windows 11 (build 22000 and newer): `MFCreateVirtualCamera` would be the way there; a DirectShow camera may not show
   in the Windows Camera app.
 - A GPU decoder (a software decoder in its low latency mode is used), and a 4K picture was not tried.
