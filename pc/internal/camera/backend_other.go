@@ -1,4 +1,4 @@
-//go:build !darwin
+//go:build !darwin && !windows
 
 package camera
 
@@ -15,9 +15,6 @@ type unsupported struct{ hint string }
 
 func hint() string {
 	switch runtime.GOOS {
-	case "windows":
-		return "There is no camera of phoneset's own for Windows yet. For now use OBS Studio: add a Browser source with " +
-			"the address `phoneset video` prints, then Start Virtual Camera."
 	case "linux":
 		return "A camera for Linux (v4l2loopback and ffmpeg) is planned and not built yet. For now use OBS Studio with " +
 			"its Virtual Camera: add a Browser source with the address `phoneset video` prints."

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,6 +20,9 @@ func cmdCamera(args []string) error {
 	sub := "status"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		sub, args = args[0], args[1:]
+	}
+	if sub == "_elevated" { // the part of install and uninstall that runs with administrator rights (Windows)
+		os.Exit(camera.ElevatedMain(args))
 	}
 	fs := flag.NewFlagSet("camera", flag.ExitOnError)
 	dir := fs.String("config-dir", "", "")
@@ -73,7 +77,7 @@ func cameraRequest(mon *camera.Monitor, install, force bool) error {
 		st := mon.Refresh()
 		switch {
 		case install && st.Phase == camera.Ready:
-			fmt.Println(term.Green("Done."), "Pick “phoneset Camera” as the camera in Zoom, Meet, FaceTime or QuickTime Player.")
+			fmt.Println(term.Green("Done."), pickText())
 			return nil
 		case install && st.Phase == camera.NeedsApproval:
 			fmt.Println(term.Yellow("Waiting for you:"), st.Hint)
@@ -86,6 +90,14 @@ func cameraRequest(mon *camera.Monitor, install, force bool) error {
 	}
 	fmt.Println(term.Yellow("Not done yet:"), cameraText(mon.Refresh()))
 	return nil
+}
+
+// pickText tells where the camera shows up, by system.
+func pickText() string {
+	if runtime.GOOS == "windows" {
+		return "Pick “phoneset Camera” as the camera in Chrome, Edge, OBS, Zoom or Teams (restart a browser that was open)."
+	}
+	return "Pick “phoneset Camera” as the camera in Zoom, Meet, FaceTime or QuickTime Player."
 }
 
 func cameraText(s camera.State) string {

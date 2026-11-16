@@ -79,6 +79,9 @@ func New(version string, port int, st *store.Store, pm *pairing.Manager, srv *se
 	be audio.Backend, log *slog.Logger) *App {
 	a := &App{Version: version, Port: port, Store: st, Pairing: pm, Server: srv, Backend: be, Log: log,
 		Camera: camera.NewMonitor(camera.Default())}
+	if s, ok := a.Camera.Backend().(camera.ConfigDirSetter); ok {
+		s.SetConfigDir(st.Dir())
+	}
 	srv.OnChange(a.notify)
 	a.Camera.OnChange(a.notify)
 	srv.OnPaired = func(d store.Device) {

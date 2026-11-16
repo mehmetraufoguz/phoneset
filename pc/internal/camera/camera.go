@@ -79,6 +79,10 @@ type Backend interface {
 	Start() error
 }
 
+// ConfigDirSetter is implemented by a backend that starts a part which has to find the running program: it is told
+// the program's config folder (where control.json is), so that a program started with --config-dir is found too.
+type ConfigDirSetter interface{ SetConfigDir(dir string) }
+
 // How long a report counts as "now", and how long a look at the system is kept.
 const (
 	reportFresh = 4 * time.Second
