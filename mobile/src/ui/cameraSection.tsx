@@ -21,7 +21,19 @@ function detailOf(v: VideoStatus): { text: string; problem: boolean } {
       : r.viewers === 1
         ? "in use on the PC"
         : `${r.viewers} viewers`
-  const sent = `${used}  ·  ${((r.kBps * 8) / 1000).toFixed(1)} Mbit/s  ·  ${viewers}`
+  // What is really being sent, not only what was asked for: the rate measured (a phone that cannot encode 30 a second
+  // said "720p30" while it made 21), and the size when the camera's picture has a different number of pixels than the
+  // mode (turning the picture upright does not change the count).
+  const rate = r.fps >= 1 ? `${Math.round(r.fps)} fps` : null
+  const cam = r.camera
+  const asked = r.mode.width * r.mode.height
+  const size =
+    cam !== null && cam.width > 0 && Math.abs(cam.width * cam.height - asked) / asked > 0.1
+      ? `${cam.width}×${cam.height}`
+      : null
+  const sent = [used, size, rate, `${((r.kBps * 8) / 1000).toFixed(1)} Mbit/s`, viewers]
+    .filter((part) => part !== null)
+    .join("  ·  ")
   return {
     text: r.adjusted ? `What you picked isn't available here, so ${sent}` : sent,
     problem: false
