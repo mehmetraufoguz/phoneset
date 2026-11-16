@@ -45,13 +45,18 @@ export const modesFor = (
     const tried = CODEC_TRIED[codec]
     if (tried === undefined) continue
     for (const tier of TIERS) {
-      // The widest size the camera lists at this height (854 x 480 over 640 x 480).
+      // The size the camera lists at this height that is closest to 16:9 (854 x 480 over 640 x 480), the wider
+      // of two equals. Not simply the widest: a camera that also lists 20:9 or 21:9 sizes (2400 x 1080) would give
+      // a size that is not 16:9, and the native side asks CameraX for 16:9, which then jumps to the next bigger
+      // picture (2688 x 1512 where 1080p was asked for, 1920 x 1080 where 720p was).
       const size = caps.sizes
         .filter((s) => s.height === tier.height)
-        .reduce<(typeof caps.sizes)[number] | null>(
-          (a, s) => (a === null || s.width > a.width ? s : a),
-          null
-        )
+        .reduce<(typeof caps.sizes)[number] | null>((a, s) => {
+          if (a === null) return s
+          const gap = (x: { width: number; height: number }) =>
+            Math.abs(x.width / x.height - 16 / 9)
+          return gap(s) < gap(a) || (gap(s) === gap(a) && s.width > a.width) ? s : a
+        }, null)
       if (size === null || tier.height > tried.maxHeight) continue
       for (const fps of RATES) {
         if (fps <= size.maxFps && fps <= tried.maxFps)
