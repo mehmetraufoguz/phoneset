@@ -106,6 +106,8 @@ type Monitor struct {
 	changed  func()
 	// removingSince is when a removal was asked for through Uninstall; zero when none is going on.
 	removingSince time.Time
+	// following: a goroutine is watching the system after an install or a removal was asked for.
+	following bool
 }
 
 func NewMonitor(b Backend) *Monitor { return &Monitor{backend: b} }
@@ -144,7 +146,7 @@ func (m *Monitor) state(force bool) State {
 }
 
 // removalPatience is how long a removal that the system has not finished still counts as going on.
-const removalPatience = 15 * time.Minute
+const removalPatience = followPatience
 
 // markRemoving shows "being removed" while a removal asked for through Uninstall is not finished: the system lists
 // the camera in the states of an install while it waits for the user (macOS: "waiting for user"), and the hint of an
@@ -178,12 +180,70 @@ func (m *Monitor) Uninstall() error {
 	m.mu.Lock()
 	m.removingSince = time.Now()
 	m.probedAt = time.Time{} // look at the system again
+	m.mu.Unlock()
+	m.notifyChanged()
+	m.follow(func(s State) bool { return s.Phase == NotInstalled || s.Phase == Unsupported })
+	return nil
+}
+
+// Install asks the backend to put the camera in place and, until the system says it is ready, keeps the display up to
+// date (the system may wait for the person, and finishes in its own time).
+func (m *Monitor) Install(ctx context.Context, o InstallOptions) error {
+	if err := m.backend.Install(ctx, o); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.probedAt = time.Time{}
+	m.mu.Unlock()
+	m.notifyChanged()
+	m.follow(func(s State) bool { return s.Phase == Ready || s.Phase == Unsupported })
+	return nil
+}
+
+func (m *Monitor) notifyChanged() {
+	m.mu.Lock()
 	fn := m.changed
 	m.mu.Unlock()
 	if fn != nil {
 		fn()
 	}
-	return nil
+}
+
+// followPatience is how long the display is kept up to date after an install or a removal was asked for.
+const followPatience = 15 * time.Minute
+
+// follow looks at the system every two seconds until done says so (or the patience ends) and tells whoever listens
+// whenever what is shown changes. Without it a tray would keep "being removed" for good: nothing else tells it that
+// the system has finished. One watcher at a time.
+func (m *Monitor) follow(done func(State) bool) {
+	m.mu.Lock()
+	if m.following {
+		m.mu.Unlock()
+		return
+	}
+	m.following = true
+	m.mu.Unlock()
+	go func() {
+		defer func() {
+			m.mu.Lock()
+			m.following = false
+			m.mu.Unlock()
+			m.notifyChanged()
+		}()
+		var last State
+		deadline := time.Now().Add(followPatience)
+		for time.Now().Before(deadline) {
+			time.Sleep(2 * time.Second)
+			s := m.Refresh()
+			if s.Phase != last.Phase || s.Hint != last.Hint {
+				m.notifyChanged()
+			}
+			last = s
+			if done(s) {
+				return
+			}
+		}
+	}()
 }
 
 // Report records what the running part said.

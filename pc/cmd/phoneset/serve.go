@@ -161,7 +161,7 @@ func cmdServe(args []string) error {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
 			opts := camera.InstallOptions{ExeDir: filepath.Dir(exe), Say: func(s string) { log.Info("camera: " + s) }}
-			if err := application.Camera.Backend().Install(ctx, opts); err != nil {
+			if err := application.Camera.Install(ctx, opts); err != nil {
 				log.Warn("couldn't install the virtual camera", "err", err)
 			}
 		},
