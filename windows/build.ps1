@@ -5,8 +5,9 @@
 #   windows\build.ps1
 #
 # Needs Git and Visual Studio 2022 (or its Build Tools) with the C++ desktop workload and a Windows 10/11 SDK.
-# Output, all under windows\dist (ignored by git): softcam.dll (the camera) and sender.exe (softcam's example that
-# sends a moving test picture, 1280 x 720 here so that it matches what the camera offers, for a first look).
+# Output, all under windows\dist (ignored by git): softcam.dll (the camera), phoneset-camera.exe (the helper that carries the
+# phone's picture to it, needs softcam.dll next to it) and sender.exe (softcam's example that sends a moving test picture,
+# 1280 x 720 here so that it matches what the camera offers, for a first look).
 $ErrorActionPreference = 'Stop'
 
 # The softcam commit this was written against; windows\filter\softcam-slate.patch applies to exactly this one.
@@ -70,4 +71,8 @@ if ($LASTEXITCODE -ne 0) { throw 'building sender.exe failed' }
 
 Copy-Item (Join-Path $src 'dist\bin\x64\softcam.dll') $dist -Force
 Copy-Item (Join-Path $src 'x64\Release\sender.exe') $dist -Force
-Write-Host "Built $dist\softcam.dll and $dist\sender.exe"
+
+# 4. The helper that carries the phone's picture to the camera (helper\): it uses softcam's sender library and header.
+& $msbuild (Join-Path $PSScriptRoot 'helper\phoneset-camera.vcxproj') /p:Configuration=Release /p:Platform=x64 "/p:SoftcamDist=$src\dist\" /v:m /nologo
+if ($LASTEXITCODE -ne 0) { throw 'building phoneset-camera.exe failed' }
+Write-Host "Built $dist\softcam.dll, $dist\sender.exe and $dist\phoneset-camera.exe (it needs softcam.dll next to it)"
