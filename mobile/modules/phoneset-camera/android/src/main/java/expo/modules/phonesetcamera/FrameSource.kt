@@ -60,6 +60,12 @@ class FrameSource(private val context: Context) : FrameProvider {
   @Volatile private var lastEncodeNs = 0L
   @Volatile private var seq = 0
 
+  // What was asked for, and whether the first picture has been logged (so that what the camera really gives can
+  // be compared with it: the PC once saw 1920 x 1080 where 1280 x 720 was asked for).
+  @Volatile private var askedWidth = 0
+  @Volatile private var askedHeight = 0
+  @Volatile private var loggedFirst = false
+
   // Counters for [stats]; written by the analysis thread, read from any.
   private val lock = Any()
   private var analysed = 0L
@@ -90,6 +96,9 @@ class FrameSource(private val context: Context) : FrameProvider {
         this.minIntervalNs = 1_000_000_000L / fps.coerceIn(1, 60)
         this.seq = 0
         this.lastEncodeNs = 0L
+        this.askedWidth = width
+        this.askedHeight = height
+        this.loggedFirst = false
         synchronized(lock) {
           analysed = 0; encoded = 0; encodeNs = 0; jpegBytes = 0; lagMs = 0; lagSamples = 0
           startedMs = SystemClock.elapsedRealtime()
@@ -118,6 +127,16 @@ class FrameSource(private val context: Context) : FrameProvider {
                 ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
               )
             )
+            // A cap as well: the strategy's "closest higher" fallback can hand over a bigger picture than asked for,
+            // which costs a JPEG of it per frame (1920 x 1080 where 1280 x 720 was asked for, about 11 frames a second
+            // on the OPPO). The filter keeps the sizes that are not bigger than asked for, the biggest of them first,
+            // and leaves the list as it is when the camera has none that small.
+            .setResolutionFilter { supported, _ ->
+              val within = supported
+                .filter { it.width <= width && it.height <= height }
+                .sortedByDescending { it.width * it.height }
+              if (within.isEmpty()) supported else within
+            }
             .build()
           val analysis = ImageAnalysis.Builder()
             .setResolutionSelector(resolution)
@@ -160,6 +179,14 @@ class FrameSource(private val context: Context) : FrameProvider {
   private fun analyze(image: ImageProxy) {
     try {
       synchronized(lock) { analysed++ }
+      if (!loggedFirst) {
+        loggedFirst = true
+        Log.i(
+          TAG,
+          "jpeg camera: asked ${askedWidth}x$askedHeight, the first picture is ${image.width}x${image.height} " +
+            "(rotation ${image.imageInfo.rotationDegrees})"
+        )
+      }
       val callback = waiter.get() ?: return // nobody is ready for a picture: it is dropped
       val now = System.nanoTime()
       // Faster than asked for: dropped. The camera's own 30 fps is never exactly 33.3 ms apart, so a

@@ -91,6 +91,15 @@ class H264Source(private val context: Context) : FrameProvider {
             .setResolutionStrategy(
               ResolutionStrategy(Size(wantWidth, wantHeight), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
             )
+            // A cap as well, as in FrameSource: with 1080p asked for, the OPPO's stream was 2688 x 1512 (twice the
+            // pixels, and the PC's decoder worked twice as hard). Sizes not bigger than asked for, the biggest first;
+            // the list is left as it is when the camera has none that small.
+            .setResolutionFilter { supported, _ ->
+              val within = supported
+                .filter { it.width <= wantWidth && it.height <= wantHeight }
+                .sortedByDescending { it.width * it.height }
+              if (within.isEmpty()) supported else within
+            }
             .build()
           val preview = Preview.Builder()
             .setResolutionSelector(resolution)
