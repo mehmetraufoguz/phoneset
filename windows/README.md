@@ -2,7 +2,7 @@
 
 The virtual camera of phoneset for Windows 10 (the plan is `docs/virtual-camera.md`, phase 3): a DirectShow camera
 "phoneset Camera" with a slate of its own, and `phoneset-camera.exe`, the helper that carries the phone's picture to it.
-**Built, tested against a stand-in, and run with an Android phone (OPPO A9 2020) on 2026-11-16**: most checks of `TESTING.md` passed; the front camera's writing looked mirrored (cause not found) and the helper's CPU at 1080p H.264 is high (239 % of one core); see `docs/virtual-camera.md`, phase 3b.
+**Built, tested against a stand-in, and run with an Android phone (OPPO A9 2020) on 2026-11-16**: most checks of `TESTING.md` passed (the front camera looked mirrored only in the browser's test page, not in OBS); the helper's CPU at 1080p H.264 is high (239 % of one core); see `docs/virtual-camera.md`, phase 3b.
 What exists and what was seen is written below, and where nothing was checked, it says so.
 
 The camera is [softcam](https://github.com/tshino/softcam) (MIT, Copyright 2020 tshino), a small C++ DirectShow source
