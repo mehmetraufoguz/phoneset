@@ -169,7 +169,7 @@ Each phase ends with something that can be seen, and the next one starts only wh
      burned about 1.5 s of CPU a second on a few tens of milliseconds of work, on top of the software decoder's 0.5 to
      0.9 s. Fixed by dropping the pool and turning only the output's pixels from NV12 to BGR in one pass: 81 to 85 % of
      one core, 5.1 to 5.3 % of the PC; a decoder thread count did not help, the hardware decoder is not tried
-     (`windows/README.md`, "The helper's cost on a real stream"). **Not
+     (`windows/README.md`, "The helper's cost on a real stream"). **After the phone-side size fix (2026-11-16, `59695e6`, `a90c8ea`)** the same 1080p ask arrives as 1920 x 1080 (High profile level 4.0, 5.9 to 6.5 Mbit/s, 31 a second written, none dropped) and the helper takes 55 % of one core, 3.4 % of the 16-thread PC, 51 MB; decode wall 214 to 219 ms a second. **Not
      checked:** a real phone's stream (colours, timing, bursts), the registered camera in Chrome, Edge and OBS with the
      helper, the program's own status and tray lines (they need the Backend, 3c), 4K, latency, a GPU decoder (`windows/README.md`,
      `windows/TESTING.md`).

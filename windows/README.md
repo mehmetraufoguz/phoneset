@@ -132,7 +132,7 @@ CPU time of every thread of the process):
 
 - The stream was **2688 x 1512** (4.06 megapixels, twice 1080p) although the app was set to 1080p: High profile, level
   5.0, 11 to 13.6 Mbit/s, 31 to 33 pictures a second, a key frame about every second. The stand-in's pictures are 1080p
-  and static, which is why it looked cheaper.
+  and static, which is why it looked cheaper. (Fixed on the phone the same evening, see below: the app asked for the widest size at the height, a 20:9 one, and CameraX jumped to the next 16:9 picture.)
 - About 14 worker threads of the exe's own PPL pool (`parallel_for`, in the NV12 conversion and in compose) burned 60 to
   170 ms each every second, about 1.5 s of CPU in total, although the work they were given was 73 ms (convert) plus
   53 ms (compose) of wall time: the pool's workers spin while they wait for the next picture. The Media Foundation

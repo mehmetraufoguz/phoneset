@@ -265,7 +265,7 @@ the camera itself delivered only 23.9 fps (not looked into).
 - **The size coded is not the mode asked.** CameraX's Preview chooses a 16:9 size, the closest larger one, so 1600 x 720
   became 1920 x 1080 and two modes became 2688 x 1512. The coder is made for what CameraX gives and the frame header
   carries that size; the PC does not check it against the mode. JPEG had the same effect (three modes arrived as
-  1080 x 1920 or 1512 x 2688).
+  1080 x 1920 or 1512 x 2688). **Fixed 2026-11-16** (`59695e6`, `a90c8ea`): the OPPO lists 1600 x 720 and 2400 x 1080 beside the 16:9 sizes, and the app asked for the widest size at the tier's height; it now asks for the size closest to 16:9 and CameraX is kept from handing over a bigger picture. Measured on the OPPO through the Windows helper: JPEG 720p arrives as 1280 x 720 (25 to 27 fps written, was 1600 x 720 at 21), H.264 1080p as 1920 x 1080 at 5.9 to 6.5 Mbit/s (was 2688 x 1512 at 11 to 13.6). The JPEG encoder is still the limit of the rate: about 37 ms a frame at 1280 x 720 on one thread.
 - **The H.264 picture is not rotated**: a phone held across is upright (protocol 8.3 notes the exception). The iPhone's
   frames are upright for a phone held upright.
 - **This phone's camera offers 30 fps only** through the module, so there is no 60 fps mode; why was not looked into.
