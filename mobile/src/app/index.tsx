@@ -36,7 +36,12 @@ export default function Home() {
 
   const detail = (pc: PairedPc): { text: string; color: string } => {
     if (connectedId === pc.id) {
-      return { text: `Connected · ${summarize(session)?.line ?? ""}`, color: colors.ok }
+      // With nothing switched on the summary line is already "Connected": do not say it twice.
+      const line = summarize(session)?.line ?? ""
+      return {
+        text: line === "Connected" || line === "" ? "Connected" : `Connected · ${line}`,
+        color: colors.ok
+      }
     }
     if (session._tag === "Connecting" && session.pcName === pc.name) {
       return { text: `${session.step}…`, color: colors.secondary }
@@ -122,15 +127,22 @@ export default function Home() {
                     />
                   </Column>
                 ) : (
-                  // Swipe the row to forget it where the platform can; otherwise it has a Forget button.
+                  // Swipe the row to forget it where the platform can. Otherwise Forget goes under the details,
+                  // like Disconnect above: beside them in a Row the details button takes the whole width first
+                  // and Forget is left with none, so its label breaks into one letter a line and the card grows
+                  // tall with nothing visible (seen on the OPPO, Android 11).
                   swipeToForget(
                     pc.id,
-                    <Row key={pc.id} alignment="center" spacing={8}>
-                      {details(pc)}
-                      {canSwipeToForget ? null : (
+                    canSwipeToForget ? (
+                      <Row key={pc.id} alignment="center" spacing={8}>
+                        {details(pc)}
+                      </Row>
+                    ) : (
+                      <Column key={pc.id} spacing={2}>
+                        {details(pc)}
                         <Button variant="text" label="Forget" onPress={() => forget(pc)} />
-                      )}
-                    </Row>,
+                      </Column>
+                    ),
                     () => forget(pc)
                   )
                 )
