@@ -166,7 +166,12 @@ func cmdServe(args []string) error {
 			}
 		},
 		CameraUninstall: func() {
-			if err := application.Camera.Backend().Uninstall(); err != nil {
+			// One click must not remove it: the tray's item sits right under the status line.
+			if !system.Confirm("Remove the camera?", "“phoneset Camera” will no longer be listed by camera programs. "+
+				"You can install it again from this menu.", "Remove the camera") {
+				return
+			}
+			if err := application.Camera.Uninstall(); err != nil {
 				log.Warn("couldn't remove the virtual camera", "err", err)
 			}
 		},

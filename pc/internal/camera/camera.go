@@ -8,6 +8,7 @@ package camera
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,9 @@ const (
 	SwitchedOff Phase = "switched off"
 	// Ready: programs can pick it.
 	Ready Phase = "ready"
+	// Removing: a removal was asked for through this program and the system has not finished it (it may wait for the
+	// user to confirm). Only the Monitor says this; a backend never does.
+	Removing Phase = "being removed"
 )
 
 // State is what the program shows of the camera.
@@ -100,6 +104,8 @@ type Monitor struct {
 	report   Report
 	reportAt time.Time
 	changed  func()
+	// removingSince is when a removal was asked for through Uninstall; zero when none is going on.
+	removingSince time.Time
 }
 
 func NewMonitor(b Backend) *Monitor { return &Monitor{backend: b} }
@@ -129,11 +135,55 @@ func (m *Monitor) state(force bool) State {
 		m.probed, m.probedAt = s, time.Now()
 	}
 	s := m.probed
+	s = m.markRemoving(s)
 	if time.Since(m.reportAt) < reportFresh {
 		s.Running, s.Line, s.Flowing = true, m.report.Line, m.report.Flowing
 	}
 	m.mu.Unlock()
 	return s
+}
+
+// removalPatience is how long a removal that the system has not finished still counts as going on.
+const removalPatience = 15 * time.Minute
+
+// markRemoving shows "being removed" while a removal asked for through Uninstall is not finished: the system lists
+// the camera in the states of an install while it waits for the user (macOS: "waiting for user"), and the hint of an
+// install ("allow it, switch it on") is the opposite of what the person has to do. The caller holds the lock.
+func (m *Monitor) markRemoving(s State) State {
+	if m.removingSince.IsZero() {
+		return s
+	}
+	if s.Phase == NotInstalled || s.Phase == Unsupported || time.Since(m.removingSince) > removalPatience {
+		m.removingSince = time.Time{}
+		return s
+	}
+	s.Phase = Removing
+	s.Hint = removingHint()
+	return s
+}
+
+func removingHint() string {
+	if runtime.GOOS == "darwin" {
+		return "macOS is waiting for you to confirm the removal: a password or Touch ID prompt, or System Settings, " +
+			"General, Login Items & Extensions, Camera Extensions."
+	}
+	return "The system is removing it."
+}
+
+// Uninstall asks the backend to remove the camera and, until the system says it is gone, shows it as being removed.
+func (m *Monitor) Uninstall() error {
+	if err := m.backend.Uninstall(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.removingSince = time.Now()
+	m.probedAt = time.Time{} // look at the system again
+	fn := m.changed
+	m.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
+	return nil
 }
 
 // Report records what the running part said.

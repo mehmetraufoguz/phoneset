@@ -66,7 +66,7 @@ func cameraRequest(mon *camera.Monitor, install, force bool) error {
 		}
 		fmt.Println("Asking the system to install the camera…")
 	} else {
-		if err := b.Uninstall(); err != nil {
+		if err := mon.Uninstall(); err != nil {
 			return err
 		}
 		fmt.Println("Asking the system to remove the camera…")

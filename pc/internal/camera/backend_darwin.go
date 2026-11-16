@@ -110,6 +110,11 @@ func (macOS) Uninstall() error {
 	if _, err := os.Stat(appPath); err != nil {
 		return fmt.Errorf("%s is not in /Applications", appName)
 	}
+	// Nothing to remove: asking would only make the app install it first (see CameraInstaller.remove).
+	if out, err := exec.Command("systemextensionsctl", "list").Output(); err == nil &&
+		PhaseFromExtensions(string(out), extensionID) == NotInstalled {
+		return fmt.Errorf("the camera is not installed")
+	}
 	return launch("--uninstall")
 }
 

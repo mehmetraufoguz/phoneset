@@ -39,7 +39,7 @@ func (a *api) cameraInstall(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *api) cameraUninstall(w http.ResponseWriter, _ *http.Request) {
-	if err := a.h.CameraMonitor().Backend().Uninstall(); err != nil {
+	if err := a.h.CameraMonitor().Uninstall(); err != nil {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}

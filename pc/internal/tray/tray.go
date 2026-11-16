@@ -143,6 +143,12 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 				cameraLine.Show()
 				cameraInstall.Hide()
 				cameraRemove.Show()
+			case camera.Removing:
+				// The system may be waiting for the person (macOS asks to confirm): neither action fits until it is done.
+				cameraLine.SetTitle("Camera: being removed, confirm it in System Settings")
+				cameraLine.Show()
+				cameraInstall.Hide()
+				cameraRemove.Hide()
 			default:
 				cameraLine.SetTitle("Camera: " + string(s.Camera.Phase))
 				cameraLine.Show()
