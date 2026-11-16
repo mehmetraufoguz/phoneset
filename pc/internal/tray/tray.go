@@ -184,10 +184,12 @@ func Run(ctx context.Context, a *app.App, act Actions, work func() error) error 
 				select {
 				case <-pair.ClickedCh:
 					act.OpenPairing()
+				// Each of these can wait for the person (a dialog, the UAC window: minutes), so they run on their own and
+				// the other items keep answering meanwhile.
 				case <-cameraInstall.ClickedCh:
-					act.CameraInstall()
+					go act.CameraInstall()
 				case <-cameraRemove.ClickedCh:
-					act.CameraUninstall()
+					go act.CameraUninstall()
 				case <-disconnect.ClickedCh:
 					act.Disconnect()
 				case <-logItem.ClickedCh:

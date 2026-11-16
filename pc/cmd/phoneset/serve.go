@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -150,6 +151,7 @@ func cmdServe(args []string) error {
 		return work()
 	}
 	exe, _ := os.Executable()
+	var cameraBusy atomic.Bool // one install or removal at a time from the tray
 	pageURL := fmt.Sprintf("http://127.0.0.1:%d/pair?t=%s", ctl.Port, ctl.Token)
 	return tray.Run(ctx, application, tray.Actions{
 		OpenPairing: func() { _ = system.OpenURL(pageURL) },
@@ -158,6 +160,10 @@ func cmdServe(args []string) error {
 		Quit:        stop,
 		OpenLog:     func() { _ = system.OpenFile(logPath) },
 		CameraInstall: func() {
+			if !cameraBusy.CompareAndSwap(false, true) { // a second click while the first still waits for the person
+				return
+			}
+			defer cameraBusy.Store(false)
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
 			opts := camera.InstallOptions{ExeDir: filepath.Dir(exe), Say: func(s string) { log.Info("camera: " + s) }}
@@ -166,6 +172,10 @@ func cmdServe(args []string) error {
 			}
 		},
 		CameraUninstall: func() {
+			if !cameraBusy.CompareAndSwap(false, true) {
+				return
+			}
+			defer cameraBusy.Store(false)
 			// One click must not remove it: the tray's item sits right under the status line.
 			if !system.Confirm("Remove the camera?", "“phoneset Camera” will no longer be listed by camera programs. "+
 				"You can install it again from this menu.", "Remove the camera") {
