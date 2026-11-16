@@ -225,19 +225,24 @@ change; the numbers are in the pages named, not in this file's memory).
 ## The owner, in Play Console and on the phone
 
 1. Finish the account: identity verification, then the device check with the OPPO through the Play Console mobile app
-   (a real, non-rooted Android 10+ phone). Note whether the account is **personal or organisation**: the 12-tester
-   rule below is written for personal accounts.
+   (a real, non-rooted Android 10+ phone). The account is **personal**, so the 12-tester rule below applies.
 2. Payments profile (merchant account) in Settings: needed for a paid app and for subscriptions. Turkey supports
    merchant registration (Google's supported-locations page); tax information is asked there.
-3. Create the app (step 2 above). **Free or paid is the one decision that cannot be undone in one direction**: free
-   can never become paid. Recommendation in the owner's private pricing note.
+3. Create the app (step 2 above) as **paid, US$0.99** (decided 2026-11-16: the Play prices follow the App Store's;
+   any later in-app price is in the owner's private pricing note). Free can never become paid, so the app is not
+   switched to free, not even for testing.
 4. `cd mobile && npx eas-cli login`, then `npx eas-cli build --platform android --profile production`; accept the
    generated keystore (it is the upload key; back it up with `npx eas-cli credentials`, never commit it). Upload the
    `.aab` to Testing > Internal testing by hand. Internal testing needs no finished app setup.
 5. App content answers: from the drafts above, after the owner has read them. The privacy policy on the website must
    get the camera paragraph first (production needs the link; the live text says the camera is only for the QR screen).
 6. Closed test for production access: 12 testers opted in for 14 days in a row (see step 5 of "Play Console, in
-   order"). Start the 14 days as soon as the setup allows, it is the longest wait.
+   order"). Start the 14 days as soon as the setup allows, it is the longest wait. Finding 12 people with a Google
+   account who stay opted in is the owner's part. Because the app is paid, Google's test page (read 2026-11-16) says
+   "testers must purchase paid apps when participating in open or closed tests. For internal tests, testers can
+   install paid apps for free." So give the closed-test testers promo codes (Play Console, Promotions; the price page
+   says a paid app can be given free with a promo code; the number of codes, and that a code covers a closed-test
+   install, were not read) or refund what they paid.
 
 ## Service fees (Google's page, read 2026-11-16)
 
@@ -255,4 +260,11 @@ Apps Experience programme (not checked whether it applies). Apple's 30% / 15% is
   OPPO measured is in `docs/webcam-measurements.md` (H.264 reached 4K at 30 fps; front-camera JPEG at 720p only
   about 6 fps).
 - The foreground service demo video (microphone) is not recorded; Google wants a link to it on the declaration form.
-- Subscriptions: no billing code exists, so there is nothing for a Play Billing product to attach to yet.
+- Subscriptions: no billing code exists, so there is nothing for a Play Billing product to attach to yet. In Play
+  Console a subscription holds base plans, each with a billing period and a price (Google's page, read 2026-11-16).
+  RevenueCat's guide lists "every six months" among the periods, the excerpt of Google's page did not show the list:
+  check that the period needed exists when the products are created.
+- Refunds (Apple's and Google's own pages, read 2026-11-16): on Apple a refund is a request at
+  reportaproblem.apple.com for a purchase that "might be eligible", answered in 24 to 48 hours; on Google the store
+  "may give refunds ... based on the refund policies", which differ by what was bought, when and where, and the
+  developer can refund too. It is a request the store may refuse, not a trial period.
