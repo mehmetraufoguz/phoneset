@@ -1,0 +1,190 @@
+diff --git a/src/softcamcore/DShowSoftcam.cpp b/src/softcamcore/DShowSoftcam.cpp
+index 024d978..4479541 100644
+--- a/src/softcamcore/DShowSoftcam.cpp
++++ b/src/softcamcore/DShowSoftcam.cpp
+@@ -7,10 +7,22 @@
+ #include <cmath>
+ #include <chrono>
+ #include <ctime>
++#include <thread>
+ 
+ 
+ namespace {
+ 
++// What the camera offers when no sender is there to say otherwise (the phoneset helper always sends this size).
++const int   DEFAULT_WIDTH = 1280;
++const int   DEFAULT_HEIGHT = 720;
++const float DEFAULT_FRAMERATE = 30.0f;
++
++// True when a sender is there and sends: only then its size and rate are the camera's.
++bool senderIsActive(const softcam::FrameBuffer& fb)
++{
++    return static_cast<bool>(fb) && fb.active();
++}
++
+ //#define ENABLE_LOG
+ //#define LOG_FILE_PATH "C:\\my_temp\\debug_log.txt"
+ 
+@@ -166,10 +178,10 @@ CUnknown * Softcam::CreateInstance(
+ Softcam::Softcam(LPUNKNOWN lpunk, const GUID& clsid, HRESULT *phr) :
+     CSource(NAME("DirectShow Softcam"), lpunk, clsid),
+     m_frame_buffer(FrameBuffer::open()),
+-    m_valid(m_frame_buffer ? true : false),
+-    m_width(m_frame_buffer.width()),
+-    m_height(m_frame_buffer.height()),
+-    m_framerate(m_frame_buffer.framerate())
++    m_valid(true),
++    m_width(senderIsActive(m_frame_buffer) ? m_frame_buffer.width() : DEFAULT_WIDTH),
++    m_height(senderIsActive(m_frame_buffer) ? m_frame_buffer.height() : DEFAULT_HEIGHT),
++    m_framerate(senderIsActive(m_frame_buffer) ? m_frame_buffer.framerate() : DEFAULT_FRAMERATE)
+ {
+     // This code is okay though it may look strange as the return value is ignored.
+     // Calling the SoftcamStream constructor results in calling the CBaseOutputPin
+@@ -413,41 +425,36 @@ HRESULT SoftcamStream::FillBuffer(IMediaSample *pms)
+     long lDataLen = pms->GetSize();
+     ZeroMemory(pData, (std::size_t)lDataLen);
+     {
+-        if (auto fb = getParent()->getFrameBuffer())
++        bool live = false;
++        // While the slate is shown a sender is looked for about ten times a second, not at every frame.
++        if (m_live || m_slate_frame % 3 == 0)
+         {
+-            bool active = fb->waitForNewFrame(m_frame_counter);
+-            fb->transferToDIB(pData, &m_frame_counter);
+-
+-            if (!active)
++            if (auto fb = getParent()->getFrameBuffer())
+             {
+-                // The sender has deactivated this stream and stopped sending frames.
+-                // We release this stream and will wait a new stream to be available.
+-                getParent()->releaseFrameBuffer();
+-
+-                // Save the last image for a placeholder.
+-                const std::size_t size = calcDIBSize(m_width, m_height);
+-                if (!m_screenshot)
++                if (fb->waitForNewFrame(m_frame_counter))
+                 {
+-                    m_screenshot.reset(new uint8_t[size]);
++                    fb->transferToDIB(pData, &m_frame_counter);
++                    live = true;
+                 }
++                else
+                 {
+-                    // Darken the image to indicate that the source is inactive.
+-                    for (std::size_t i = 0; i < size; i++)
+-                    {
+-                        pData[i] /= 4;
+-                    }
++                    // The sender has deactivated this stream or stopped (its heartbeat is gone).
++                    // We release this stream, show the slate, and wait for a new stream to be available.
++                    getParent()->releaseFrameBuffer();
+                 }
+-                std::memcpy(m_screenshot.get(), pData, size);
+             }
+         }
++
++        if (live)
++        {
++            m_live = true;
++            m_slate_paced = false;
++        }
+         else
+         {
+-            // Waiting for a new stream.
++            m_live = false;
+             m_frame_counter = 0;
+-            Timer::sleep(0.100f);
+-
+-            const std::size_t size = calcDIBSize(m_width, m_height);
+-            std::memcpy(pData, m_screenshot.get(), size);
++            showSlate(pData, lDataLen);
+         }
+ 
+         CAutoLock lock(&m_critsec);
+@@ -461,6 +468,35 @@ HRESULT SoftcamStream::FillBuffer(IMediaSample *pms)
+ }
+ 
+ 
++void SoftcamStream::showSlate(BYTE* data, long size)
++{
++    if (!m_slate)
++    {
++        m_slate.reset(new Slate(m_width, m_height));
++    }
++    m_slate->render(data, (std::size_t)size, m_slate_frame);
++    m_slate_frame++;
++
++    // Pace the slate like a real camera: one picture per frame period.
++    float framerate = getParent()->framerate();
++    if (framerate <= 0.0f)
++    {
++        framerate = 60.0f;
++    }
++    framerate = (std::min)((std::max)(framerate, 1.0f), 1000.0f);
++    const auto interval = std::chrono::microseconds((long long)std::llround(1000000.0 / framerate));
++    const auto now = std::chrono::steady_clock::now();
++    if (!m_slate_paced || now > m_slate_due + 3 * interval)
++    {
++        // The first slate picture, or far behind (the machine was busy or asleep): start the beat again.
++        m_slate_due = now;
++        m_slate_paced = true;
++    }
++    std::this_thread::sleep_until(m_slate_due);
++    m_slate_due += interval;
++}
++
++
+ STDMETHODIMP SoftcamStream::Notify(IBaseFilter * pSender, Quality q)
+ {
+     CAutoLock lock(&m_critsec);
+diff --git a/src/softcamcore/DShowSoftcam.h b/src/softcamcore/DShowSoftcam.h
+index fcecf93..d94f394 100644
+--- a/src/softcamcore/DShowSoftcam.h
++++ b/src/softcamcore/DShowSoftcam.h
+@@ -1,8 +1,10 @@
+ #pragma once
+ 
++#include <chrono>
+ #include <memory>
+ #include <baseclasses/streams.h>
+ #include "FrameBuffer.h"
++#include "Slate.h"
+ 
+ 
+ namespace softcam {
+@@ -89,7 +91,14 @@ private:
+     const int   m_width;
+     const int   m_height;
+     uint64_t    m_frame_counter = 0;
+-    std::unique_ptr<uint8_t[]>  m_screenshot;
++
++    // The slate shown while no sender is there (and in between two senders).
++    std::unique_ptr<Slate>  m_slate;
++    uint64_t    m_slate_frame = 0;
++    bool        m_live = false;
++    bool        m_slate_paced = false;
++    std::chrono::steady_clock::time_point   m_slate_due;
++    void        showSlate(BYTE* data, long size);
+ 
+     CCritSec m_critsec;
+     CRefTime m_sample_time;
+diff --git a/src/softcamcore/softcamcore.vcxproj b/src/softcamcore/softcamcore.vcxproj
+index babc0b7..e8a9cbc 100644
+--- a/src/softcamcore/softcamcore.vcxproj
++++ b/src/softcamcore/softcamcore.vcxproj
+@@ -157,6 +157,7 @@
+     <ClInclude Include="FrameBuffer.h" />
+     <ClInclude Include="Misc.h" />
+     <ClInclude Include="SenderAPI.h" />
++    <ClInclude Include="Slate.h" />
+     <ClInclude Include="Watchdog.h" />
+   </ItemGroup>
+   <ItemGroup>
+@@ -164,6 +165,7 @@
+     <ClCompile Include="FrameBuffer.cpp" />
+     <ClCompile Include="Misc.cpp" />
+     <ClCompile Include="SenderAPI.cpp" />
++    <ClCompile Include="Slate.cpp" />
+     <ClCompile Include="Watchdog.cpp" />
+   </ItemGroup>
+   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
