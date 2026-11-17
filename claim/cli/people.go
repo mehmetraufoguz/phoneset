@@ -14,20 +14,54 @@ import (
 // Everything personal stays in this file on the owner's Mac (git-ignored folder); the database only ever
 // sees a token hash.
 type person struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	Channel     string `json:"channel,omitempty"`
-	Note        string `json:"note,omitempty"`
-	Created     string `json:"created"`
-	Token       string `json:"token,omitempty"`
-	TokenHash   string `json:"tokenHash,omitempty"`
-	MintedAt    string `json:"mintedAt,omitempty"`
-	ExpiresAt   string `json:"expiresAt,omitempty"`
-	MailedAt    string `json:"mailedAt,omitempty"`
-	Code        string `json:"code,omitempty"`
-	ClaimedSeen string `json:"claimedSeen,omitempty"`
-	Revoked     bool   `json:"revoked,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Email       string   `json:"email"`
+	Channel     string   `json:"channel,omitempty"`
+	Note        string   `json:"note,omitempty"`
+	Created     string   `json:"created"`
+	Token       string   `json:"token,omitempty"`
+	TokenHash   string   `json:"tokenHash,omitempty"`
+	MintedAt    string   `json:"mintedAt,omitempty"`
+	ExpiresAt   string   `json:"expiresAt,omitempty"`
+	MailedAt    string   `json:"mailedAt,omitempty"`
+	Code        string   `json:"code,omitempty"` // the first code; kept so an older people.json still reads
+	ClaimedSeen string   `json:"claimedSeen,omitempty"`
+	Revoked     bool     `json:"revoked,omitempty"`
+	Kinds       string   `json:"kinds,omitempty"` // "app", "video" or "app,video"; empty means "app" (older links)
+	Store       string   `json:"store,omitempty"` // "apple" or "google"; empty means "apple"
+	Codes       []issued `json:"codes,omitempty"`
+}
+
+// issued is one code the database gave to a person's link.
+type issued struct {
+	Kind string `json:"kind"`
+	Code string `json:"code"`
+}
+
+func (p person) kinds() []string {
+	if p.Kinds == "" {
+		return []string{"app"}
+	}
+	return strings.Split(p.Kinds, ",")
+}
+
+func (p person) store() string {
+	if p.Store == "" {
+		return "apple"
+	}
+	return p.Store
+}
+
+// issuedCodes is what the person has been shown; an older record only has the single Code.
+func (p person) issuedCodes() []issued {
+	if len(p.Codes) > 0 {
+		return p.Codes
+	}
+	if p.Code != "" {
+		return []issued{{Kind: "app", Code: p.Code}}
+	}
+	return nil
 }
 
 type config struct {
@@ -109,7 +143,7 @@ func (p person) status(now time.Time) string {
 	switch {
 	case p.Revoked:
 		return "revoked"
-	case p.Code != "":
+	case len(p.issuedCodes()) >= len(p.kinds()):
 		return "claimed"
 	case p.Token == "":
 		return "new"

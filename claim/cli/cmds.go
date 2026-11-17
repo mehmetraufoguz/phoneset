@@ -47,22 +47,26 @@ func (a *app) cmdAdd(args []string) error {
 	return nil
 }
 
-// sync asks the database which of the known tokens got a code.
+// sync asks the database which of the known tokens got codes.
 func (a *app) sync() error {
-	rows, err := a.db.query("SELECT t.hash AS hash, COALESCE(c.code, '') AS code FROM tokens t LEFT JOIN codes c ON c.token_hash = t.hash")
+	rows, err := a.db.query("SELECT t.hash AS hash, c.kind AS kind, c.code AS code FROM tokens t JOIN codes c ON c.token_hash = t.hash ORDER BY c.kind")
 	if err != nil {
 		return err
 	}
-	codes := map[string]string{}
+	byHash := map[string][]issued{}
 	for _, r := range rows {
-		codes[str(r["hash"])] = str(r["code"])
+		byHash[str(r["hash"])] = append(byHash[str(r["hash"])], issued{Kind: str(r["kind"]), Code: str(r["code"])})
 	}
 	changed := false
 	for i := range a.st.People {
 		p := &a.st.People[i]
-		if p.TokenHash != "" && p.Code == "" && codes[p.TokenHash] != "" {
-			p.Code = codes[p.TokenHash]
-			p.ClaimedSeen = time.Now().Format(time.RFC3339)
+		got := byHash[p.TokenHash]
+		if p.TokenHash != "" && len(got) > len(p.issuedCodes()) {
+			p.Codes = got
+			p.Code = got[0].Code
+			if len(got) >= len(p.kinds()) {
+				p.ClaimedSeen = time.Now().Format(time.RFC3339)
+			}
 			changed = true
 		}
 	}
@@ -94,6 +98,15 @@ func mask(code string) string {
 	return "…" + code[len(code)-4:]
 }
 
+// maskAll shows every code the person has, as "app …ABCD, video …WXYZ".
+func maskAll(codes []issued) string {
+	var parts []string
+	for _, c := range codes {
+		parts = append(parts, c.Kind+" "+mask(c.Code))
+	}
+	return strings.Join(parts, ", ")
+}
+
 func (a *app) cmdList(args []string) error {
 	fs := a.flags("list")
 	offline := fs.Bool("offline", false, "do not ask the database, show what was known last time")
@@ -114,13 +127,13 @@ func (a *app) cmdList(args []string) error {
 	}
 	now := time.Now()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tNAME\tCHANNEL\tSTATUS\tLINK ENDS\tCODE")
+	fmt.Fprintln(tw, "ID\tNAME\tCHANNEL\tFOR\tSTATUS\tLINK ENDS\tCODES")
 	for _, p := range a.st.People {
 		ends := ""
 		if p.ExpiresAt != "" {
 			ends = parseTime(p.ExpiresAt).Local().Format("2006-01-02")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", p.ID, p.Name, p.Channel, p.status(now), ends, mask(p.Code))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s %s\t%s\t%s\t%s\n", p.ID, p.Name, p.Channel, strings.Join(p.kinds(), "+"), p.store(), p.status(now), ends, maskAll(p.issuedCodes()))
 	}
 	return tw.Flush()
 }
@@ -142,8 +155,9 @@ func (a *app) cmdShow(args []string) error {
 	if p.Token != "" {
 		fmt.Printf("link: %s\nminted: %s, ends: %s\nmailed: %s\n", a.link(*p), p.MintedAt, p.ExpiresAt, p.MailedAt)
 	}
-	if p.Code != "" {
-		fmt.Printf("code: %s (shown to them %s)\n", p.Code, p.ClaimedSeen)
+	fmt.Printf("for: %s (%s)\n", strings.Join(p.kinds(), " + "), p.store())
+	for _, c := range p.issuedCodes() {
+		fmt.Printf("%s code: %s (shown to them %s)\n", c.Kind, c.Code, p.ClaimedSeen)
 	}
 	return nil
 }
@@ -152,9 +166,17 @@ func (a *app) cmdMint(args []string) error {
 	fs := a.flags("mint")
 	days := fs.Int("days", 7, "how long the link works (1 to 7)")
 	force := fs.Bool("force", false, "make a new link even if the person has a live one")
+	kinds := fs.String("kinds", "app", "what the link gives: app, video (the camera subscription) or app,video")
+	store := fs.String("store", "apple", "which store the person uses: apple or google")
 	words, err := parse(fs, args)
 	if err != nil || len(words) != 1 {
 		return errors.New("usage: promo mint [--days 7] <id>")
+	}
+	if *kinds != "app" && *kinds != "video" && *kinds != "app,video" {
+		return errors.New("--kinds must be app, video or app,video")
+	}
+	if *store != "apple" && *store != "google" {
+		return errors.New("--store must be apple or google")
 	}
 	if *days < 1 || *days > 7 {
 		return errors.New("--days must be 1 to 7 (the rule that links never outnumber codes counts on at most 7)")
@@ -186,12 +208,14 @@ func (a *app) cmdMint(args []string) error {
 		return err
 	}
 
-	free, pending, err := a.capacity()
-	if err != nil {
-		return err
-	}
-	if pending+1 > free {
-		return fmt.Errorf("not enough codes: %d link(s) are waiting and only %d code(s) have 14+ days left. Import more codes first", pending, free)
+	for _, kind := range strings.Split(*kinds, ",") {
+		free, pending, err := a.capacity(kind, *store)
+		if err != nil {
+			return err
+		}
+		if pending+1 > free {
+			return fmt.Errorf("not enough %s codes for %s: %d link(s) are waiting and only %d code(s) have 14+ days left. Import more codes first", kind, *store, pending, free)
+		}
 	}
 
 	token, err := signToken(key)
@@ -203,13 +227,14 @@ func (a *app) cmdMint(args []string) error {
 	if !hashRe.MatchString(hash) {
 		return errors.New("internal error: bad hash")
 	}
-	if _, err := a.db.query(fmt.Sprintf("INSERT INTO tokens(hash, expires_at) VALUES (%s, CAST(strftime('%%s','now') AS INTEGER) + %d)", quote(hash), *days*86400)); err != nil {
+	if _, err := a.db.query(fmt.Sprintf("INSERT INTO tokens(hash, expires_at, kinds, store) VALUES (%s, CAST(strftime('%%s','now') AS INTEGER) + %d, %s, %s)", quote(hash), *days*86400, quote(*kinds), quote(*store))); err != nil {
 		return err
 	}
 	now := time.Now()
 	p.Token, p.TokenHash = token, hash
 	p.MintedAt, p.ExpiresAt = now.Format(time.RFC3339), now.Add(time.Duration(*days)*24*time.Hour).Format(time.RFC3339)
-	p.MailedAt, p.Code, p.ClaimedSeen = "", "", ""
+	p.MailedAt, p.Code, p.ClaimedSeen, p.Codes = "", "", "", nil
+	p.Kinds, p.Store = *kinds, *store
 	if err := a.st.save(); err != nil {
 		return err
 	}
@@ -217,13 +242,18 @@ func (a *app) cmdMint(args []string) error {
 	return nil
 }
 
-// capacity returns the codes that still have 14+ days left (7 days for the link plus 7 to use the code)
-// and the links that are waiting to be pressed.
-func (a *app) capacity() (free, pending int64, err error) {
-	rows, err := a.db.query(`SELECT
-		(SELECT COUNT(*) FROM codes WHERE token_hash IS NULL AND generated_on >= date('now', '-14 days')) AS free,
-		(SELECT COUNT(*) FROM tokens t WHERE t.expires_at > CAST(strftime('%s','now') AS INTEGER)
-			AND NOT EXISTS (SELECT 1 FROM codes c WHERE c.token_hash = t.hash)) AS pending`)
+// capacity returns, for one kind of code in one store, the codes that still have 14+ days left (7 days for the
+// link plus 7 to use the code) and the links that are waiting to be given a code of that kind.
+func (a *app) capacity(kind, store string) (free, pending int64, err error) {
+	if (kind != "app" && kind != "video") || (store != "apple" && store != "google") {
+		return 0, 0, errors.New("internal error: bad kind or store")
+	}
+	rows, err := a.db.query(fmt.Sprintf(`SELECT
+		(SELECT COUNT(*) FROM codes WHERE token_hash IS NULL AND kind = %[1]s AND store = %[2]s AND valid_until >= date('now', '+14 days')) AS free,
+		(SELECT COUNT(*) FROM tokens t WHERE t.expires_at > CAST(strftime('%%s','now') AS INTEGER) AND t.store = %[2]s
+			AND (',' || t.kinds || ',') LIKE %[3]s
+			AND NOT EXISTS (SELECT 1 FROM codes c WHERE c.token_hash = t.hash AND c.kind = %[1]s)) AS pending`,
+		quote(kind), quote(store), quote("%,"+kind+",%")))
 	if err != nil || len(rows) != 1 {
 		return 0, 0, fmt.Errorf("could not count the codes: %v", err)
 	}
@@ -249,8 +279,8 @@ func (a *app) cmdRevoke(args []string) error {
 	if err := a.sync(); err != nil {
 		return err
 	}
-	if p.Code != "" {
-		return fmt.Errorf("%s was already shown code %s; a shown code stays with them", p.Name, mask(p.Code))
+	if got := p.issuedCodes(); len(got) > 0 {
+		return fmt.Errorf("%s was already shown %s; a shown code stays with them", p.Name, maskAll(got))
 	}
 	if _, err := a.db.query(fmt.Sprintf("DELETE FROM tokens WHERE hash = %s AND NOT EXISTS (SELECT 1 FROM codes WHERE token_hash = %s)", quote(p.TokenHash), quote(p.TokenHash))); err != nil {
 		return err
@@ -265,7 +295,7 @@ func (a *app) cmdRevoke(args []string) error {
 
 func (a *app) cmdCodes(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: promo codes import --generated YYYY-MM-DD <file> | promo codes status")
+		return errors.New("usage: promo codes import ... <file> | promo codes status")
 	}
 	switch args[0] {
 	case "import":
@@ -276,21 +306,57 @@ func (a *app) cmdCodes(args []string) error {
 	return fmt.Errorf("unknown: promo codes %s", args[0])
 }
 
+const importUsage = `usage:
+  promo codes import --generated YYYY-MM-DD <file>                       App Store promo codes for the app (4 weeks from that date)
+  promo codes import --kind video --valid-until YYYY-MM-DD <file>        subscription offer codes (the last day they work)
+  add --store google for Google Play codes (always with --valid-until); --kind is app or video`
+
 func (a *app) codesImport(args []string) error {
 	fs := a.flags("codes import")
-	generated := fs.String("generated", "", "the date App Store Connect shows for this batch (Promo Codes, History), YYYY-MM-DD")
+	generated := fs.String("generated", "", "App Store promo codes for the app only: the date App Store Connect shows for this batch (Promo Codes, History)")
+	validUntil := fs.String("valid-until", "", "the last day the codes work, YYYY-MM-DD (the page shows one day earlier, because a store does not say at which hour a code ends)")
+	kind := fs.String("kind", "app", "app, or video for the camera subscription")
+	store := fs.String("store", "apple", "apple or google")
 	words, err := parse(fs, args)
-	if err != nil || len(words) != 1 || !dateRe.MatchString(*generated) {
-		return errors.New("usage: promo codes import --generated YYYY-MM-DD <file with one code per line>")
+	if err != nil || len(words) != 1 || (*kind != "app" && *kind != "video") || (*store != "apple" && *store != "google") {
+		return errors.New(importUsage)
 	}
-	day, err := time.Parse("2006-01-02", *generated)
-	if err != nil {
-		return fmt.Errorf("--generated: %v", err)
-	}
-	if age := time.Since(day); age > 27*24*time.Hour {
-		return errors.New("that batch is almost or fully expired (codes last 4 weeks)")
-	} else if age < -24*time.Hour {
-		return errors.New("--generated is in the future")
+	today := time.Now().UTC().Format("2006-01-02")
+	var shownUntil, generatedOn string
+	switch {
+	case *generated != "" && *validUntil != "":
+		return errors.New("use either --generated or --valid-until, not both")
+	case *generated != "":
+		if *kind != "app" || *store != "apple" {
+			return errors.New("--generated only fits App Store promo codes for the app; use --valid-until for the rest")
+		}
+		if !dateRe.MatchString(*generated) {
+			return errors.New(importUsage)
+		}
+		day, err := time.Parse("2006-01-02", *generated)
+		if err != nil {
+			return fmt.Errorf("--generated: %v", err)
+		}
+		if age := time.Since(day); age > 27*24*time.Hour {
+			return errors.New("that batch is almost or fully expired (codes last 4 weeks)")
+		} else if age < -24*time.Hour {
+			return errors.New("--generated is in the future")
+		}
+		generatedOn, shownUntil = *generated, day.AddDate(0, 0, 27).Format("2006-01-02")
+	case *validUntil != "":
+		if !dateRe.MatchString(*validUntil) {
+			return errors.New(importUsage)
+		}
+		end, err := time.Parse("2006-01-02", *validUntil)
+		if err != nil {
+			return fmt.Errorf("--valid-until: %v", err)
+		}
+		if time.Until(end) < 15*24*time.Hour {
+			return errors.New("--valid-until is under 15 days away: a link can only be given while the code has 7+ days left, and a link lasts up to 7 days")
+		}
+		generatedOn, shownUntil = today, end.AddDate(0, 0, -1).Format("2006-01-02")
+	default:
+		return errors.New(importUsage)
 	}
 	f, err := os.Open(words[0])
 	if err != nil {
@@ -306,7 +372,7 @@ func (a *app) codesImport(args []string) error {
 			continue
 		}
 		if !codeRe.MatchString(line) {
-			return fmt.Errorf("%q does not look like a promo code (letters and digits, 6 to 32)", line)
+			return fmt.Errorf("%q does not look like a code (letters and digits, 6 to 32)", line)
 		}
 		if !seen[line] {
 			seen[line] = true
@@ -337,9 +403,9 @@ func (a *app) codesImport(args []string) error {
 		end := min(i+40, len(codes))
 		var values []string
 		for _, c := range codes[i:end] {
-			values = append(values, fmt.Sprintf("(%s, %s)", quote(c), quote(*generated)))
+			values = append(values, fmt.Sprintf("(%s, %s, %s, %s, %s)", quote(c), quote(generatedOn), quote(*kind), quote(*store), quote(shownUntil)))
 		}
-		if _, err := a.db.query("INSERT OR IGNORE INTO codes(code, generated_on) VALUES " + strings.Join(values, ", ")); err != nil {
+		if _, err := a.db.query("INSERT OR IGNORE INTO codes(code, generated_on, kind, store, valid_until) VALUES " + strings.Join(values, ", ")); err != nil {
 			return err
 		}
 	}
@@ -347,7 +413,7 @@ func (a *app) codesImport(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("added %d new code(s); %d were already in the database\n", after-before, int64(len(codes))-(after-before))
+	fmt.Printf("added %d new %s code(s) for %s, shown as \"use before %s\"; %d were already in the database\n", after-before, *kind, *store, shownUntil, int64(len(codes))-(after-before))
 	return nil
 }
 
@@ -359,24 +425,31 @@ func (a *app) codesStatus(args []string) error {
 	if err := a.open(); err != nil {
 		return err
 	}
-	rows, err := a.db.query(`SELECT COUNT(*) AS total,
+	rows, err := a.db.query(`SELECT kind, store, COUNT(*) AS total,
 		COALESCE(SUM(token_hash IS NOT NULL), 0) AS assigned,
-		COALESCE(SUM(token_hash IS NULL AND generated_on >= date('now', '-21 days')), 0) AS usable,
-		COALESCE(SUM(token_hash IS NULL AND generated_on >= date('now', '-14 days')), 0) AS fresh,
-		COALESCE(SUM(token_hash IS NULL AND generated_on < date('now', '-21 days')), 0) AS stale
-		FROM codes`)
-	if err != nil || len(rows) != 1 {
+		COALESCE(SUM(token_hash IS NULL AND valid_until >= date('now', '+7 days')), 0) AS usable,
+		COALESCE(SUM(token_hash IS NULL AND valid_until >= date('now', '+14 days')), 0) AS fresh,
+		COALESCE(SUM(token_hash IS NULL AND valid_until < date('now', '+7 days')), 0) AS stale
+		FROM codes GROUP BY kind, store ORDER BY kind, store`)
+	if err != nil {
 		return fmt.Errorf("could not read the codes: %v", err)
 	}
-	r := rows[0]
-	_, pending, err := a.capacity()
-	if err != nil {
-		return err
+	if len(rows) == 0 {
+		fmt.Println("no codes yet: promo codes import ...")
+		return nil
 	}
-	fresh := num(r["fresh"])
-	fmt.Printf("codes in the database:           %d\n  given to a link:               %d\n  free, 7+ days left (can be given): %d\n  free, 14+ days left (counted by mint): %d\n  free but under 7 days left (too late): %d\nlinks waiting to be pressed:      %d\nlinks you can still make:         %d\n",
-		num(r["total"]), num(r["assigned"]), num(r["usable"]), fresh, num(r["stale"]), pending, max(fresh-pending, 0))
-	return nil
+	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "KIND\tSTORE\tIN DATABASE\tGIVEN\tFREE (7+ DAYS)\tFREE (14+ DAYS)\tTOO LATE\tLINKS WAITING\tLINKS YOU CAN STILL MAKE")
+	for _, r := range rows {
+		kind, store := str(r["kind"]), str(r["store"])
+		_, pending, err := a.capacity(kind, store)
+		if err != nil {
+			return err
+		}
+		fresh := num(r["fresh"])
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", kind, store, num(r["total"]), num(r["assigned"]), num(r["usable"]), fresh, num(r["stale"]), pending, max(fresh-pending, 0))
+	}
+	return tw.Flush()
 }
 
 func firstLine(s string) string {

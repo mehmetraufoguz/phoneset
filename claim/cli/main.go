@@ -1,4 +1,4 @@
-// promo hands out phoneset App Store promo codes. It keeps the people (names, emails) on this Mac and
+// promo hands out phoneset codes (App Store promo codes, subscription offer codes, Google Play codes). It keeps the people (names, emails) on this Mac and
 // talks to the claim Worker's database through wrangler; the database only ever knows token hashes
 // and promo codes. See claim/README.md.
 package main
@@ -13,17 +13,18 @@ import (
 	"strings"
 )
 
-const usage = `promo: hand out phoneset App Store promo codes
+const usage = `promo: hand out phoneset codes (app and camera subscription)
 
   promo add --name "Ali" --email ali@example.com [--channel twitch] [--note "..."]
   promo list [--offline]            who has what, and how far along they are
   promo show <id>                   one person in full, with the link and the code
-  promo mint [--days 7] <id>        make the link for a person
+  promo mint [--days 7] [--kinds app|video|app,video] [--store apple|google] <id>   make the link for a person
   promo mail [--sent] <id>          write the email (copied to the clipboard, opens your mail app)
   promo sync                        ask the database who pressed the button
   promo revoke <id>                 withdraw a link that was not pressed yet
-  promo codes import --generated YYYY-MM-DD <file>   add the codes App Store Connect gave you
-  promo codes status                how many codes are left, how many links you can still make
+  promo codes import --generated YYYY-MM-DD <file>   add the App Store promo codes for the app
+  promo codes import --kind video --valid-until YYYY-MM-DD <file>   add subscription offer codes (--store google for Google Play)
+  promo codes status                per kind and store: how many codes are left, how many links you can still make
   promo key init [--force]          make the signing key (kept in the macOS Keychain); promo key show prints it
 
   --local   use the local test database (wrangler dev) instead of the real one

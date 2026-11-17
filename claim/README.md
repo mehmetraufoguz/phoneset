@@ -1,10 +1,13 @@
-# Promo code claim
+# Code claim
 
-Gives App Store promo codes to the people you choose, without handing the codes out in public.
+Gives codes to the people you choose, without handing them out in public: App Store promo codes for the app, subscription offer
+codes for the camera subscription (kind `video`), and the same for Google Play. One link can carry the app code, the
+subscription code, or both ("two codes per winner").
 
 - `worker/`: a Cloudflare Worker with a D1 database, the API at `https://claim-phoneset.rauf.app/api/claim`.
-  Pressing the button binds the oldest promo code that still has 7+ days left to the token. Asking again shows
-  the same code. The database only holds codes and token hashes: no names, no emails. The Worker also has a
+  Pressing the button binds to the token one code of each kind it is for: the one that ends first and still has 7+
+  days left. If one kind has no code left, nothing is given (a person never gets half). Asking again shows the same
+  codes. The database only holds codes and token hashes: no names, no emails. The Worker also has a
   plain page of its own at `/c/<token>`, a fallback.
 - The page people open lives in the rauf.app site (repository `raufapp`): `src/pages/phoneset/claim.mdx` and
   `src/components/work/ClaimCode.client.tsx`, at `https://rauf.app/phoneset/claim#<token>`. It is a static page;
@@ -12,15 +15,19 @@ Gives App Store promo codes to the people you choose, without handing the codes 
 - `cli/`: a small Go program (`promo`) on your Mac. It keeps the people, makes the links, writes the emails and
   shows who is at which step. It reaches the database through `wrangler`, so there is no admin endpoint.
 
-Apple's rules this is built around: a promo code is single use, valid for 4 weeks from the day it was
+Apple's rules this is built around: an app promo code is single use, valid for 4 weeks from the day it was
 generated, at most 100 per app version. People who redeem one cannot rate or review the app, and codes must
-not be traded for reviews.
+not be traded for reviews. A subscription offer code has the end date you chose when you made it in App Store Connect
+(one-time-use codes up to 6 months; Google Play subscription promo codes are a free trial of 3 to 90 days; both stores'
+help pages, read 2026-11-16). The page does not say how long the free time is, because the code itself decides that.
 
 ## Rules the tools enforce
 
-- Codes are given oldest first. A code is only given while it has 7+ days left.
-- A link works for at most 7 days. `promo mint` refuses when the links waiting would outnumber the codes that
-  still have 14+ days left (7 days for the link plus 7 to use the code).
+- Codes are given in the order they end. A code is only given while it has 7+ days left (`valid_until`, the day the
+  page shows, which is one day before the real end).
+- A link works for at most 7 days. `promo mint` refuses when the links waiting for a kind of code (in one store)
+  would outnumber the codes of that kind and store that still have 14+ days left (7 days for the link plus 7 to use
+  the code).
 - A link that was pressed keeps its code, also after the link's own days are over. Such a link cannot be revoked.
 - The page only shows the code after a button press (POST), because mail scanners open links in advance.
 - The token travels after the `#` of the page address, which a browser never sends to a server, so it is not in
@@ -59,15 +66,25 @@ A rate limit on `/api/claim` is a good extra now that the Worker has a custom do
 rate limiting rules (counted per IP, 10 second window; the free plan can match on the path only, so the rule
 covers the whole zone rauf.app); they do not apply on the `workers.dev` address.
 
+## Upgrading a database made before the camera subscription
+
+Once, before deploying the new Worker: `cd claim/worker && wrangler d1 execute phoneset-claim --remote --file=migrate-1-kinds.sql`.
+Existing codes become `app` / `apple`; links already made keep working. A fresh database uses `schema.sql` as it is.
+Deploy the Worker after the migration (the old Worker would not read the new columns' rules), then publish the page.
+
 ## Use
 
 ```sh
-promo codes import --generated 2026-11-01 codes.txt   # the date App Store Connect shows under Promo Codes, History
+promo codes import --generated 2026-11-01 codes.txt   # App Store promo codes for the app: the date ASC shows under Promo Codes, History
+promo codes import --kind video --valid-until 2027-05-01 offer-codes.txt   # subscription offer codes: the last day they work
+promo codes import --kind video --store google --valid-until 2027-05-01 google-codes.txt   # Google Play (always --valid-until)
 promo add --name "Ali" --email ali@example.com --channel twitch
-promo mint ali          # makes the link
+promo mint ali                         # a link for the app (App Store)
+promo mint ali --kinds app,video       # app code and subscription code on one link
+promo mint ali --kinds video --store google   # a Google Play subscription code
 promo mail ali          # email text on the clipboard and in your mail app; you send it
 promo list              # who is where: new, minted, mailed, claimed, expired, revoked
-promo codes status      # how many codes and links are left
+promo codes status      # per kind and store: how many codes and links are left
 ```
 
 "claimed" means the person pressed the button and was shown a code. Apple does not say who redeemed a code.

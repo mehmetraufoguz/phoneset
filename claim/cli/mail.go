@@ -19,17 +19,41 @@ func firstName(full string) string {
 	return full
 }
 
-// compose writes the email. It asks for nothing in return: no rating, no review (App Review's rules
+// compose writes the email. It asks for nothing in return: no rating, no review (the stores' rules
 // forbid trading free copies for reviews, and a code cannot leave one anyway).
 func compose(p person, link string) (subject, body string) {
-	subject = "phoneset: a free copy for you"
+	phone := "iPhone"
+	if p.store() == "google" {
+		phone = "Android phone"
+	}
+	hasApp, hasVideo := false, false
+	for _, k := range p.kinds() {
+		hasApp = hasApp || k == "app"
+		hasVideo = hasVideo || k == "video"
+	}
+	var gift, what, press string
+	switch {
+	case hasApp && hasVideo:
+		subject = "phoneset: a free copy and free camera time for you"
+		gift = "a free copy of the app and free time on its camera subscription"
+		what = "two codes to redeem: one for the app, one for the camera subscription"
+	case hasVideo:
+		subject = "phoneset: free camera time for you"
+		gift = "free time on the camera subscription of the app"
+		what = "one code to redeem for the camera subscription (you need the app first)"
+	default:
+		subject = "phoneset: a free copy for you"
+		gift = "a free copy of the app"
+		what = "one code to redeem"
+	}
+	press = "press it and you get " + what
 	body = fmt.Sprintf(`Hi %s,
 
-Thanks for being up for trying phoneset. It turns an iPhone into the microphone and headphones of a Windows PC or a Mac, over your own Wi-Fi. Here is a free copy of the app, no strings attached:
+Thanks for being up for trying phoneset. It turns a %s into the microphone, headphones and (with the camera subscription) webcam of a Windows PC or a Mac, over your own Wi-Fi. Here is %s, no strings attached:
 
 %s
 
-The link opens a page with a button; press it and you get one App Store code to redeem. The link works for 7 days, and the code has its own end date (the page shows it).
+The link opens a page with a button; %s. The link works for 7 days, and each code has its own end date (the page shows it).
 
 The app is half of it: you also need the free phoneset program on your PC, which is one command on Windows:
 https://github.com/mehmetraufoguz/phoneset#1-on-the-pc
@@ -37,7 +61,7 @@ https://github.com/mehmetraufoguz/phoneset#1-on-the-pc
 If anything is unclear or breaks, just reply to this email. I would love to hear how it goes, but you owe me nothing: no review, no rating.
 
 Mehmet
-`, firstName(p.Name), link)
+`, firstName(p.Name), phone, gift, link, press)
 	return subject, body
 }
 
