@@ -253,9 +253,9 @@ Apps Experience programme (not checked whether it applies). Apple's 30% / 15% is
 
 ## What stays open in the repository
 
-- The camera permission text in `mobile/app.json` (`expo-camera`) still says the camera is for scanning the QR code.
-  It must say it can also send the picture to the PC before a build that ships the camera is submitted, on both
-  stores.
+- The camera permission text in `mobile/app.json` (`expo-camera`) now says the camera also sends the picture to the PC
+  (changed 2026-11-17; it reaches the iOS `Info.plist` with the next prebuild). The App Review notes for the camera
+  release still say "scans the pairing QR code only" and must be rewritten before submission.
 - Whether the "Camera (experimental)" section stays visible on Android (asked 2026-11-11, unanswered). What the
   OPPO measured is in `docs/webcam-measurements.md` (H.264 reached 4K at 30 fps; front-camera JPEG at 720p only
   about 6 fps).

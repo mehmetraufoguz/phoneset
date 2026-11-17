@@ -63,7 +63,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "phoneset uses the camera to scan the pairing QR code shown on your PC.",
+          "cameraPermission": "phoneset uses the camera to scan the pairing QR code shown on your PC, and to send the camera's picture to your PC while you have the webcam switched on.",
           "recordAudioAndroid": false
         }
       ],
