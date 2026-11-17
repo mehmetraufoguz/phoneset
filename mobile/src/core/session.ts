@@ -16,6 +16,7 @@ import { type Channel, openChannel } from "./channel"
 import { AUDIO_HEADER_LEN, Frame, VIDEO_PATH, WS_PATH } from "./constants"
 import { Crypto, equal, protocolOf } from "./crypto"
 import { Discovery, firstReachable } from "./discovery"
+import { Entitlement } from "./entitlement"
 import {
   type AudioError,
   AuthError,
@@ -170,6 +171,7 @@ function makeSession() {
     const pcs = yield* PairedPcs
     const audio = yield* AudioIO
     const camera = yield* CameraIO
+    const entitlement = yield* Entitlement
     const discovery = yield* Discovery
     const sockets = yield* SocketFactory
     const crypto = yield* Crypto
@@ -500,8 +502,14 @@ function makeSession() {
 
         const startVideo = (facing: Facing) =>
           Effect.gen(function* () {
-            // If video is ever sold, the check that allows it belongs here: refuse with a message
-            // (videoFailed) before the camera or the connection is touched.
+            // Video is a subscription: refuse with a message (videoFailed, which also puts the switch back off) before the
+            // camera or the connection is touched. Audio never comes through here.
+            if (!(yield* entitlement.allowed)) {
+              yield* videoFailed(
+                "The camera is a subscription. Subscribe in the section below to use it."
+              )
+              return
+            }
             const permitted = yield* camera.ensurePermission.pipe(
               Effect.as(true),
               Effect.catch((e) => videoFailed(e.message).pipe(Effect.as(false)))

@@ -1,4 +1,5 @@
 import { Layer, ManagedRuntime } from "effect"
+import { Entitlement } from "./core/entitlement"
 import { Presence } from "./core/presence"
 import { Session } from "./core/session"
 import { SocketFactory } from "./core/socket"
@@ -9,6 +10,7 @@ import { CameraLive } from "./platform/camera"
 import { CryptoLive } from "./platform/crypto"
 import { DiscoveryLive } from "./platform/discovery"
 import { PresenceLive } from "./platform/presence"
+import { StoreLive } from "./platform/store"
 
 const PlatformLive = Layer.mergeAll(
   EntropyLive,
@@ -19,12 +21,14 @@ const PlatformLive = Layer.mergeAll(
   AudioLive,
   CameraLive,
   PresenceLive,
+  StoreLive,
   SocketFactory.layer
 )
 
 /** Everything the UI can ask for: Session, PairedPcs and the platform services. */
 export const AppLayer = Presence.watcher.pipe(
   Layer.provideMerge(Session.layer),
+  Layer.provideMerge(Entitlement.layer),
   Layer.provideMerge(PairedPcs.layer),
   Layer.provideMerge(PlatformLive)
 )

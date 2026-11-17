@@ -38,6 +38,13 @@ export class PairLinkError extends Schema.TaggedError<PairLinkError>()("PairLink
   message: Schema.String
 }) {}
 
+/** The store (App Store / Google Play) refused, was cancelled, or could not be reached. */
+export class StoreError extends Schema.TaggedError<StoreError>()("StoreError", {
+  message: Schema.String,
+  /** The person closed the purchase sheet: not an error to show. */
+  cancelled: Schema.Boolean
+}) {}
+
 /** A bug on our side: something threw where nothing was expected to. */
 export class InternalError extends Schema.TaggedError<InternalError>()("InternalError", {
   message: Schema.String
