@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.rapp.phoneset",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
