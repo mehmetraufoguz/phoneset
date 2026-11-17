@@ -1,15 +1,17 @@
-// Draws the two subscription images (1024 x 1024, RGB, no alpha, square corners: App Store Connect's rules for a
-// subscription's promotional image) in the style of the app icon: the same blue, the same phone and waves.
-// Run: swift make.swift   (writes camera-monthly.png and camera-6-months.png next to this file)
+// Draws the subscription images in the style of the app icon: the same blue, the same phone and waves.
+// camera-monthly.png and camera-6-months.png: 1024 x 1024, RGB, no alpha, square corners (App Store Connect's rules for a
+// subscription's promotional image). camera-google.png: the same without the period, as a 32-bit PNG (with an alpha
+// channel, fully opaque), which is what Google Play's subscription icon asks for; the Play product has both plans.
+// Run: swift make.swift   (writes the three files next to this file)
 import AppKit
 
 let size: CGFloat = 1024
 
-func draw(title: String, period: String, to path: String) {
-  // An opaque RGB bitmap (no alpha channel at all), drawn with Core Graphics.
+func draw(title: String, period: String?, alpha: Bool = false, to path: String) {
+  // An opaque bitmap: RGB with no alpha channel at all, or (alpha: true) RGBA with every pixel opaque. Core Graphics.
   let cg = CGContext(
     data: nil, width: Int(size), height: Int(size), bitsPerComponent: 8, bytesPerRow: 0,
-    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: (alpha ? CGImageAlphaInfo.premultipliedLast : CGImageAlphaInfo.noneSkipLast).rawValue)!
   // Work with the origin at the top left, like the icon's own coordinates.
   cg.translateBy(x: 0, y: size)
   cg.scaleBy(x: 1, y: -1)
@@ -82,7 +84,7 @@ func draw(title: String, period: String, to path: String) {
     NSGraphicsContext.restoreGraphicsState()
   }
   text(title, at: 650, size: 128, weight: .bold, alpha: 1)
-  text(period, at: 800, size: 68, weight: .semibold, alpha: 0.82)
+  if let period { text(period, at: 800, size: 68, weight: .semibold, alpha: 0.82) }
 
   let out = CGImageDestinationCreateWithURL(
     URL(fileURLWithPath: path) as CFURL, "public.png" as CFString, 1, nil)!
@@ -93,3 +95,4 @@ func draw(title: String, period: String, to path: String) {
 let here = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().path
 draw(title: "Camera", period: "Monthly", to: "\(here)/camera-monthly.png")
 draw(title: "Camera", period: "6 months", to: "\(here)/camera-6-months.png")
+draw(title: "Camera", period: nil, alpha: true, to: "\(here)/camera-google.png")
