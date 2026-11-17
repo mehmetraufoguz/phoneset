@@ -2,17 +2,23 @@ import { Button, FieldGroup, Host, Row, Spacer, Text } from "@expo/ui"
 import * as Application from "expo-application"
 import { useRouter } from "expo-router"
 import { LICENSE_URL, PRIVACY_URL, REPO_URL, SUPPORT_URL } from "../core/links"
-import { BRAND, useColors } from "../ui/hooks"
+import { BRAND, useColors, useEntitlement, useOffers, useStoreActions } from "../ui/hooks"
 import { openUrl } from "../ui/open"
+import { subscriptionSection } from "../ui/subscriptionSection"
 
 export default function Settings() {
   const router = useRouter()
   const colors = useColors()
+  // The subscription can be bought, restored and managed here too, not only on the screen of a connected PC: it must be
+  // reachable without a PC (App Review has none).
+  const subscription = { state: useEntitlement(), offers: useOffers(), actions: useStoreActions() }
   const version = `${Application.nativeApplicationVersion ?? "?"} (${Application.nativeBuildVersion ?? "?"})`
 
   return (
     <Host style={{ flex: 1 }} seedColor={BRAND}>
       <FieldGroup>
+        {subscriptionSection(subscription, colors)}
+
         <FieldGroup.Section title="Help">
           <Button variant="text" label="How it works" onPress={() => router.push("/help")} />
           <Button variant="text" label="Support" onPress={() => openUrl(SUPPORT_URL)} />

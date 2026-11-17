@@ -1,7 +1,9 @@
 import { Effect, Fiber, Stream, SubscriptionRef } from "effect"
 import { useEffect, useState } from "react"
-import { useColorScheme } from "react-native"
+import { AppState, useColorScheme } from "react-native"
 import { Discovery } from "../core/discovery"
+import { Entitlement, type EntitlementState, type Offer } from "../core/entitlement"
+import type { StoreError } from "../core/errors"
 import { Session, type SessionState } from "../core/session"
 import { PairedPcs } from "../core/storage"
 import { type AppServices, runtime } from "../runtime"
@@ -73,5 +75,64 @@ export function useColors() {
     secondary: dark ? "#98989F" : "#6C6C70",
     danger: dark ? "#FF6961" : "#D70015",
     ok: dark ? "#32D74B" : "#248A3D"
+  }
+}
+
+const entitlementStates: Stream.Stream<EntitlementState, never, AppServices> = Stream.unwrap(
+  Entitlement.use((e) => Effect.succeed(SubscriptionRef.changes(e.state)))
+)
+
+/**
+ * Whether video is allowed (a subscription is held), kept up to date: asked once when the screen opens and again each
+ * time the app comes back to the front (a purchase can be made, renewed or cancelled outside it).
+ */
+export function useEntitlement(): EntitlementState {
+  const state = useStreamValue(entitlementStates, { _tag: "Unknown" } as EntitlementState)
+  useEffect(() => {
+    const refresh = () => {
+      runtime.runFork(Entitlement.use((e) => e.refresh))
+    }
+    refresh()
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") refresh()
+    })
+    return () => sub.remove()
+  }, [])
+  return state
+}
+
+const offersEffect = Entitlement.use((e) => e.offers).pipe(
+  Effect.orElseSucceed(() => [] as ReadonlyArray<Offer>)
+)
+
+/** The plans on sale with their prices; empty until the store has answered (or when it cannot be reached). */
+export const useOffers = (): ReadonlyArray<Offer> =>
+  useEffectValue(offersEffect, [] as ReadonlyArray<Offer>)
+
+/** The buttons of the subscription section: each runs against the store and shows its failure, never a cancel. */
+export function useStoreActions() {
+  const [message, setMessage] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const run = (effect: Effect.Effect<void, StoreError, AppServices>) => {
+    setBusy(true)
+    setMessage(null)
+    runtime.runFork(
+      effect.pipe(
+        Effect.catch((e) =>
+          Effect.sync(() => {
+            if (!e.cancelled) setMessage(e.message)
+          })
+        ),
+        Effect.ensuring(Effect.sync(() => setBusy(false)))
+      )
+    )
+  }
+  return {
+    message,
+    busy,
+    buy: (offer: Offer) => run(Entitlement.use((e) => e.buy(offer))),
+    restore: () => run(Entitlement.use((e) => e.restore)),
+    redeemCode: () => run(Entitlement.use((e) => e.redeemCode)),
+    manage: () => run(Entitlement.use((e) => e.manage))
   }
 }

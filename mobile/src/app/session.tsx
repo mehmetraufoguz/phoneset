@@ -4,12 +4,22 @@ import { useRouter } from "expo-router"
 import { Platform } from "react-native"
 import { Session, type SessionState, type StreamStatus } from "../core/session"
 import { cameraSection } from "../ui/cameraSection"
-import { act, BRAND, useColors, useSessionState } from "../ui/hooks"
+import {
+  act,
+  BRAND,
+  useColors,
+  useEntitlement,
+  useOffers,
+  useSessionState,
+  useStoreActions
+} from "../ui/hooks"
+import { type SubscriptionView, subscriptionSection } from "../ui/subscriptionSection"
 
 export default function SessionScreen() {
   const router = useRouter()
   const state = useSessionState()
   const colors = useColors()
+  const subscription = { state: useEntitlement(), offers: useOffers(), actions: useStoreActions() }
 
   // The phone is a live microphone here: keep it awake while this screen is open.
   useKeepAwake()
@@ -25,7 +35,7 @@ export default function SessionScreen() {
     <Host style={{ flex: 1 }} seedColor={BRAND}>
       <FieldGroup>
         {state._tag === "Connected" ? (
-          connectedSections(state, colors, disconnect)
+          connectedSections(state, colors, disconnect, subscription)
         ) : state._tag === "Failed" ? (
           <FieldGroup.Section title="Couldn't connect">
             <Text textStyle={{ color: colors.danger }}>{state.message}</Text>
@@ -53,7 +63,8 @@ export default function SessionScreen() {
 function connectedSections(
   state: Extract<SessionState, { _tag: "Connected" }>,
   colors: ReturnType<typeof useColors>,
-  onDisconnect: () => void
+  onDisconnect: () => void,
+  subscription: SubscriptionView
 ) {
   const detail = (s: StreamStatus, on: string, off: string) =>
     s.error ?? (s.on ? on : s.available ? off : "Not available on this PC")
@@ -116,6 +127,7 @@ function connectedSections(
       </FieldGroup.Section>
 
       {cameraSection(state.video, colors)}
+      {subscriptionSection(subscription, colors)}
 
       <FieldGroup.Section title="Sound">
         {Platform.OS === "ios" ? (
