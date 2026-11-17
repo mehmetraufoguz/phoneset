@@ -99,3 +99,23 @@ promo --local ...        # in another terminal; uses a separate people file, doc
 # ALLOWED_ORIGINS=http://localhost:5173 to claim/worker/.dev.vars, restart the Worker, and make links with
 # PROMO_PAGE_URL=http://localhost:5173/phoneset/claim promo --local mint ...
 ```
+
+## Lists of people (testers, giveaways, other apps)
+
+People live in `people.json` on your Mac; a person can be on any number of named lists. The database never sees lists or emails.
+
+```bash
+promo group import play-testers people.csv   # CSV: name,email[,channel[,note]]; a known email is only put on the list
+promo add --name "Ali" --email ali@example.com --group play-testers,giveaway
+promo group ls                               # lists and their sizes
+promo group export play-testers              # emails, one per line: paste or upload into Play's closed-test tester list
+promo list --group play-testers              # who has a link, who pressed the button
+promo mint --group play-testers --kinds app --store google   # a link for everyone on the list who has none (stops when codes run out)
+```
+
+`promo group add|rm <list> <id>...` moves people. The same list can be reused by another app: the Worker's code pool is phoneset's, but
+the list and the export are not.
+
+For the 12-testers-for-14-days rule of a personal Play account: the export gives Play the emails, the testers opt in with their own
+Google account, and the paid app is installed with a promo code (or the claim link, once Play codes are imported). Whether Play's promo
+codes cover closed-test installs of a paid app is not verified.

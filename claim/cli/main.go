@@ -15,10 +15,12 @@ import (
 
 const usage = `promo: hand out phoneset codes (app and camera subscription)
 
-  promo add --name "Ali" --email ali@example.com [--channel twitch] [--note "..."]
-  promo list [--offline]            who has what, and how far along they are
+  promo add --name "Ali" --email ali@example.com [--channel twitch] [--note "..."] [--group play-testers]
+  promo list [--offline] [--group G]   who has what, and how far along they are
+  promo group ls|add|rm|import|export   lists of people (Play testers, a giveaway, another app's beta); promo group shows the details
   promo show <id>                   one person in full, with the link and the code
   promo mint [--days 7] [--kinds app|video|app,video] [--store apple|google] <id>   make the link for a person
+  promo mint --group G [--kinds ..] [--store ..]   make links for everyone on a list who has none
   promo mail [--sent] <id>          write the email (copied to the clipboard, opens your mail app)
   promo sync                        ask the database who pressed the button
   promo revoke <id>                 withdraw a link that was not pressed yet
@@ -61,6 +63,8 @@ func main() {
 		err = a.cmdAdd(args)
 	case "list":
 		err = a.cmdList(args)
+	case "group":
+		err = a.cmdGroup(args)
 	case "show":
 		err = a.cmdShow(args)
 	case "mint":

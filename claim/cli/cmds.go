@@ -29,7 +29,12 @@ func (a *app) cmdAdd(args []string) error {
 	email := fs.String("email", "", "their email (stays on this Mac)")
 	channel := fs.String("channel", "", "where you met them, e.g. twitch")
 	note := fs.String("note", "", "anything you want to remember")
+	group := fs.String("group", "", "list(s) to put them on, comma separated, e.g. play-testers")
 	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	groups, err := parseGroups(*group)
+	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(*name) == "" || !strings.Contains(*email, "@") {
@@ -38,7 +43,7 @@ func (a *app) cmdAdd(args []string) error {
 	if err := a.open(); err != nil {
 		return err
 	}
-	p := person{ID: a.st.newID(*name), Name: strings.TrimSpace(*name), Email: strings.TrimSpace(*email), Channel: *channel, Note: *note, Created: time.Now().Format(time.RFC3339)}
+	p := person{ID: a.st.newID(*name), Name: strings.TrimSpace(*name), Email: strings.TrimSpace(*email), Channel: *channel, Note: *note, Groups: groups, Created: time.Now().Format(time.RFC3339)}
 	a.st.People = append(a.st.People, p)
 	if err := a.st.save(); err != nil {
 		return err
@@ -110,6 +115,7 @@ func maskAll(codes []issued) string {
 func (a *app) cmdList(args []string) error {
 	fs := a.flags("list")
 	offline := fs.Bool("offline", false, "do not ask the database, show what was known last time")
+	group := fs.String("group", "", "only the people on this list")
 	if _, err := parse(fs, args); err != nil {
 		return err
 	}
@@ -121,19 +127,24 @@ func (a *app) cmdList(args []string) error {
 			fmt.Fprintln(os.Stderr, "could not reach the database, showing the last known state:", firstLine(err.Error()))
 		}
 	}
-	if len(a.st.People) == 0 {
-		fmt.Println("no one yet: promo add --name ... --email ...")
+	people := a.st.inGroup(*group)
+	if len(people) == 0 {
+		if *group != "" {
+			fmt.Printf("no one on the list %q (see: promo group ls)\n", *group)
+		} else {
+			fmt.Println("no one yet: promo add --name ... --email ...")
+		}
 		return nil
 	}
 	now := time.Now()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tNAME\tCHANNEL\tFOR\tSTATUS\tLINK ENDS\tCODES")
-	for _, p := range a.st.People {
+	fmt.Fprintln(tw, "ID\tNAME\tCHANNEL\tLISTS\tFOR\tSTATUS\tLINK ENDS\tCODES")
+	for _, p := range people {
 		ends := ""
 		if p.ExpiresAt != "" {
 			ends = parseTime(p.ExpiresAt).Local().Format("2006-01-02")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s %s\t%s\t%s\t%s\n", p.ID, p.Name, p.Channel, strings.Join(p.kinds(), "+"), p.store(), p.status(now), ends, maskAll(p.issuedCodes()))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s %s\t%s\t%s\t%s\n", p.ID, p.Name, p.Channel, strings.Join(p.Groups, ","), strings.Join(p.kinds(), "+"), p.store(), p.status(now), ends, maskAll(p.issuedCodes()))
 	}
 	return tw.Flush()
 }
@@ -168,9 +179,10 @@ func (a *app) cmdMint(args []string) error {
 	force := fs.Bool("force", false, "make a new link even if the person has a live one")
 	kinds := fs.String("kinds", "app", "what the link gives: app, video (the camera subscription) or app,video")
 	store := fs.String("store", "apple", "which store the person uses: apple or google")
+	group := fs.String("group", "", "make links for everyone on this list who has none yet (instead of one id)")
 	words, err := parse(fs, args)
-	if err != nil || len(words) != 1 {
-		return errors.New("usage: promo mint [--days 7] <id>")
+	if err != nil || (len(words) != 1) == (*group == "") {
+		return errors.New("usage: promo mint [--days 7] [--kinds ..] [--store ..] <id>   or   promo mint --group <list> ...")
 	}
 	if *kinds != "app" && *kinds != "video" && *kinds != "app,video" {
 		return errors.New("--kinds must be app, video or app,video")
@@ -184,21 +196,46 @@ func (a *app) cmdMint(args []string) error {
 	if err := a.open(); err != nil {
 		return err
 	}
-	p, err := a.st.find(words[0])
-	if err != nil {
-		return err
-	}
-	if p.Revoked {
-		return errors.New("this person's link was revoked; add them again if you want to start over")
-	}
 	if err := a.sync(); err != nil {
 		return err
+	}
+	if *group == "" {
+		p, err := a.st.find(words[0])
+		if err != nil {
+			return err
+		}
+		return a.mintOne(p, *days, *force, *kinds, *store)
+	}
+	made, skipped := 0, 0
+	for i := range a.st.People {
+		p := &a.st.People[i]
+		if !p.inGroup(*group) {
+			continue
+		}
+		// in a bulk run anyone who already has a link or a code is left alone, whatever --force says
+		if s := p.status(time.Now()); p.Revoked || s == "claimed" || s == "minted" || s == "mailed" {
+			skipped++
+			continue
+		}
+		if err := a.mintOne(p, *days, false, *kinds, *store); err != nil {
+			fmt.Fprintf(os.Stderr, "stopped at %s: %v\n", p.ID, err)
+			break
+		}
+		made++
+	}
+	fmt.Printf("\n%d link(s) made, %d already had one. Mail them with: promo mail <id>\n", made, skipped)
+	return nil
+}
+
+func (a *app) mintOne(p *person, days int, force bool, kinds, store string) error {
+	if p.Revoked {
+		return errors.New("this person's link was revoked; add them again if you want to start over")
 	}
 	switch s := p.status(time.Now()); s {
 	case "claimed":
 		return fmt.Errorf("%s already pressed the button and has a code (promo show %s)", p.Name, p.ID)
 	case "minted", "mailed":
-		if !*force {
+		if !force {
 			return fmt.Errorf("%s already has a live link (promo show %s); use --force to make another", p.Name, p.ID)
 		}
 	}
@@ -208,13 +245,13 @@ func (a *app) cmdMint(args []string) error {
 		return err
 	}
 
-	for _, kind := range strings.Split(*kinds, ",") {
-		free, pending, err := a.capacity(kind, *store)
+	for _, kind := range strings.Split(kinds, ",") {
+		free, pending, err := a.capacity(kind, store)
 		if err != nil {
 			return err
 		}
 		if pending+1 > free {
-			return fmt.Errorf("not enough %s codes for %s: %d link(s) are waiting and only %d code(s) have 14+ days left. Import more codes first", kind, *store, pending, free)
+			return fmt.Errorf("not enough %s codes for %s: %d link(s) are waiting and only %d code(s) have 14+ days left. Import more codes first", kind, store, pending, free)
 		}
 	}
 
@@ -227,18 +264,18 @@ func (a *app) cmdMint(args []string) error {
 	if !hashRe.MatchString(hash) {
 		return errors.New("internal error: bad hash")
 	}
-	if _, err := a.db.query(fmt.Sprintf("INSERT INTO tokens(hash, expires_at, kinds, store) VALUES (%s, CAST(strftime('%%s','now') AS INTEGER) + %d, %s, %s)", quote(hash), *days*86400, quote(*kinds), quote(*store))); err != nil {
+	if _, err := a.db.query(fmt.Sprintf("INSERT INTO tokens(hash, expires_at, kinds, store) VALUES (%s, CAST(strftime('%%s','now') AS INTEGER) + %d, %s, %s)", quote(hash), days*86400, quote(kinds), quote(store))); err != nil {
 		return err
 	}
 	now := time.Now()
 	p.Token, p.TokenHash = token, hash
-	p.MintedAt, p.ExpiresAt = now.Format(time.RFC3339), now.Add(time.Duration(*days)*24*time.Hour).Format(time.RFC3339)
+	p.MintedAt, p.ExpiresAt = now.Format(time.RFC3339), now.Add(time.Duration(days)*24*time.Hour).Format(time.RFC3339)
 	p.MailedAt, p.Code, p.ClaimedSeen, p.Codes = "", "", "", nil
-	p.Kinds, p.Store = *kinds, *store
+	p.Kinds, p.Store = kinds, store
 	if err := a.st.save(); err != nil {
 		return err
 	}
-	fmt.Printf("link for %s (works %d days):\n%s\n\nnext: promo mail %s\n", p.Name, *days, a.link(*p), p.ID)
+	fmt.Printf("link for %s (works %d days):\n%s\n\nnext: promo mail %s\n", p.Name, days, a.link(*p), p.ID)
 	return nil
 }
 

@@ -31,12 +31,22 @@ type person struct {
 	Kinds       string   `json:"kinds,omitempty"` // "app", "video" or "app,video"; empty means "app" (older links)
 	Store       string   `json:"store,omitempty"` // "apple" or "google"; empty means "apple"
 	Codes       []issued `json:"codes,omitempty"`
+	Groups      []string `json:"groups,omitempty"` // lists the person is on, e.g. "play-testers"; one person can be on several
 }
 
 // issued is one code the database gave to a person's link.
 type issued struct {
 	Kind string `json:"kind"`
 	Code string `json:"code"`
+}
+
+func (p person) inGroup(g string) bool {
+	for _, x := range p.Groups {
+		if x == g {
+			return true
+		}
+	}
+	return false
 }
 
 func (p person) kinds() []string {
