@@ -3,14 +3,14 @@
     "name": "phoneset",
     "slug": "phoneset",
     "scheme": "phoneset",
-    "version": "0.2.0",
+    "version": "0.3.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "ios": {
       "bundleIdentifier": "com.rapp.phoneset",
       "appleTeamId": "JY83GWM55C",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.rapp.phoneset",
-      "versionCode": 1,
+      "versionCode": 2,
       "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
