@@ -152,17 +152,18 @@ page does not say which one is meant for data that goes to the user's own device
 
 Either way: encryption in transit yes, a way to request deletion not applicable (no account, nothing is held).
 
-## Foreground service declaration (microphone), draft
+## Foreground service declaration (microphone)
 
-- **Description**: "phoneset turns the phone into the microphone of the user's own computer. While the user has the
-  microphone switched on, a foreground service keeps the microphone streaming to the paired computer over the local
-  Wi-Fi when the screen turns off or another app is in front. It stops when the user switches the microphone off
-  or ends the connection."
-- **User impact if interrupted**: "The computer would lose its microphone in the middle of a call or a recording,
-  and the user would not notice until the other side complained."
-- **Use case**: Background Audio Access.
-- **Demo video** (a link; not recorded yet): open the app, connect to a PC, switch the microphone on, show the
-  notification, go to the home screen, show that the PC still receives sound, switch the microphone off.
+Read in Play Console on 2026-11-17 (App content > Foreground service permissions, shown after a bundle with
+`FOREGROUND_SERVICE_MICROPHONE` was uploaded). The form asks one question, "What tasks require your app to use the
+permission?", with two choices: **Background audio input** and **Other**. Choosing Background audio input opens a single
+field, a **video link**. There are no description or impact fields (an earlier draft here had them; that was wrong).
+
+- Answer: Background audio input (what the app does: the phone's microphone keeps streaming to the paired PC while the app
+  is in the background or the screen is off).
+- Demo video (not recorded yet; needs the OPPO connected): open the app, connect to a PC, switch the microphone on, show the
+  notification, go to the home screen, show the PC still receives sound, switch the microphone off. Upload it unlisted and
+  paste the link, then Save (the button stays off until the link is filled).
 
 ## Store text
 
