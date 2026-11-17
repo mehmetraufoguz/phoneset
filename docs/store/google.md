@@ -130,7 +130,7 @@ release build also works (`expo prebuild`, JDK 17, `gradlew bundleRelease`) but 
 
 | Item | Answer | Why |
 | --- | --- | --- |
-| Privacy policy | `https://rauf.app/phoneset/privacy/` | **Needs an update first**: it says the camera is "used only on the Scan QR code screen", and the app can now send the camera to the PC (paragraph below) |
+| Privacy policy | `https://rauf.app/phoneset/privacy/` | Updated and published 2026-11-17: covers the camera as a webcam, the camera subscription and the camera choices kept per PC |
 | Ads | No | no ads |
 | App access | All functionality is available without special access | no account; but a PC with the phoneset program is needed to see anything, say so in the notes |
 | Content rating | Utility, no violence, sexual content, drugs, gambling, user-generated content or location sharing | the IARC questionnaire |
@@ -138,12 +138,6 @@ release build also works (`expo prebuild`, JDK 17, `gradlew bundleRelease`) but 
 | News, COVID-19, government, financial, health | No | none applies |
 | Data safety | see below | |
 | Foreground service (microphone) | see below | |
-
-Replacement paragraph for the privacy policy, for the website repository:
-
-> **Camera.** Used on the Scan QR code screen to read the pairing QR code shown by the PC. If you switch on "Camera
-> as a webcam", the camera picture is sent, encrypted, to your own PC on the local network and nowhere else. The
-> app does not keep it.
 
 ## Data safety (draft)
 
@@ -234,8 +228,8 @@ change; the numbers are in the pages named, not in this file's memory).
 4. `cd mobile && npx eas-cli login`, then `npx eas-cli build --platform android --profile production`; accept the
    generated keystore (it is the upload key; back it up with `npx eas-cli credentials`, never commit it). Upload the
    `.aab` to Testing > Internal testing by hand. Internal testing needs no finished app setup.
-5. App content answers: from the drafts above, after the owner has read them. The privacy policy on the website must
-   get the camera paragraph first (production needs the link; the live text says the camera is only for the QR screen).
+5. App content answers: from the drafts above, after the owner has read them. The privacy policy on the website already
+   covers the camera and the subscription (published 2026-11-17).
 6. Closed test for production access: 12 testers opted in for 14 days in a row (see step 5 of "Play Console, in
    order"). Start the 14 days as soon as the setup allows, it is the longest wait. Finding 12 people with a Google
    account who stay opted in is the owner's part. Because the app is paid, Google's test page (read 2026-11-16) says
