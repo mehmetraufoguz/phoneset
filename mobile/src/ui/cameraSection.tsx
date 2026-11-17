@@ -129,15 +129,21 @@ export function cameraSection(v: VideoStatus, colors: Colors): ReactElement {
               ))}
             </Picker>
           </Row>
+          <Button
+            variant="text"
+            label="Reset to defaults"
+            onPress={() => act(Session.use((s) => s.resetCamera))}
+          />
         </>
       ) : null}
       <FieldGroup.SectionFooter>
         <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
-          The picture follows how you hold the phone: across for a landscape picture, upright for a
-          portrait one. A bigger picture needs a faster Wi-Fi and warms the phone up. Automatic uses
-          H.264, which is smaller and smoother; JPEG is for programs on the PC that read plain MJPEG
-          (`phoneset video --mjpeg`), but it needs much more Wi-Fi and the phone works harder. Keep
-          this screen open while the camera is on. To see it on your PC, run `phoneset video` there.
+          These choices are remembered for this PC. The picture follows how you hold the phone:
+          across for a landscape picture, upright for a portrait one. A bigger picture needs a
+          faster Wi-Fi and warms the phone up. Automatic uses H.264, which is smaller and smoother;
+          JPEG is for programs on the PC that read plain MJPEG (`phoneset video --mjpeg`), but it
+          needs much more Wi-Fi and the phone works harder. Keep this screen open while the camera
+          is on. To see it on your PC, run `phoneset video` there.
         </Text>
       </FieldGroup.SectionFooter>
     </FieldGroup.Section>

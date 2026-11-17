@@ -12,6 +12,7 @@ import {
 import { AudioIO, type Player } from "./audio"
 import { fromBase64, toBase64, u32be, utf8 } from "./bytes"
 import { CameraIO, type Facing } from "./camera"
+import { CameraPrefs, DEFAULT_CHOICES } from "./cameraPrefs"
 import { type Channel, openChannel } from "./channel"
 import { AUDIO_HEADER_LEN, Frame, VIDEO_PATH, WS_PATH } from "./constants"
 import { Crypto, equal, protocolOf } from "./crypto"
@@ -159,6 +160,8 @@ export class Session extends Context.Service<
     readonly setRate: (fps: number) => Effect.Effect<void>
     /** Picks the format: left to the app, or one codec (the picture starts again if the camera is on). */
     readonly setFormat: (format: VideoFormat) => Effect.Effect<void>
+    /** Puts the camera choices of the connected PC back to the defaults and forgets what was saved for it. */
+    readonly resetCamera: Effect.Effect<void>
     /** Running streams are stopped and started again so the audio session can take the new mode. */
     readonly setVoiceProcessing: (on: boolean) => Effect.Effect<void>
   }
@@ -172,6 +175,7 @@ function makeSession() {
     const audio = yield* AudioIO
     const camera = yield* CameraIO
     const entitlement = yield* Entitlement
+    const choices = yield* CameraPrefs
     const discovery = yield* Discovery
     const sockets = yield* SocketFactory
     const crypto = yield* Crypto
@@ -182,6 +186,8 @@ function makeSession() {
     const connection = yield* FiberHandle.make<void, never>()
     const lastTarget = yield* Ref.make<Target | null>(null)
     const desired = yield* Ref.make<Required<StreamRequest>>(nothingOn)
+    // The PC whose saved camera choices are in `desired` (null until a connection has loaded them).
+    const loadedFor = yield* Ref.make<string | null>(null)
     const voiceProcessing = yield* Ref.make(false)
 
     const setState = (s: SessionState) => SubscriptionRef.set(state, s)
@@ -365,6 +371,13 @@ function makeSession() {
         const player = yield* Ref.make<Player | null>(null)
         let micSeq = 0
         let pingN = 0
+
+        // The camera choices saved for this PC, loaded once per start (a reconnect keeps what was picked since).
+        if ((yield* Ref.get(loadedFor)) !== pc.id) {
+          const saved = yield* choices.get(pc.id).pipe(Effect.orElseSucceed(() => DEFAULT_CHOICES))
+          yield* Ref.update(desired, (d) => ({ ...d, ...saved }))
+          yield* Ref.set(loadedFor, pc.id)
+        }
 
         yield* setState({
           _tag: "Connected",
@@ -720,6 +733,7 @@ function makeSession() {
         const targetRef = yield* Ref.make(target)
         const connectedOnce = yield* Ref.make(false)
         yield* Ref.set(desired, nothingOn)
+        yield* Ref.set(loadedFor, null)
         yield* connecting(target, "Starting")
         yield* FiberHandle.run(connection, supervise(targetRef, connectedOnce, 0))
       })
@@ -733,10 +747,37 @@ function makeSession() {
       yield* setState(idle)
     })
 
+    // What was picked for the camera is kept for the PC it is connected to, so that the next connection starts with it.
+    const saveChoices = (req: StreamRequest) =>
+      req.camera === undefined &&
+      req.quality === undefined &&
+      req.rate === undefined &&
+      req.format === undefined
+        ? Effect.void
+        : Effect.gen(function* () {
+            const s = yield* SubscriptionRef.get(state)
+            if (s._tag !== "Connected") return
+            const d = yield* Ref.get(desired)
+            yield* choices.save(s.pc.id, {
+              camera: d.camera,
+              quality: d.quality,
+              rate: d.rate,
+              format: d.format
+            })
+          }).pipe(Effect.ignore)
+
     const request = (req: StreamRequest) =>
       Ref.update(desired, (d) => ({ ...d, ...req })).pipe(
+        Effect.andThen(saveChoices(req)),
         Effect.andThen(Queue.offer(commands, req))
       )
+
+    const resetCamera = Effect.gen(function* () {
+      const s = yield* SubscriptionRef.get(state)
+      if (s._tag !== "Connected") return
+      yield* request(DEFAULT_CHOICES)
+      yield* choices.reset(s.pc.id).pipe(Effect.ignore)
+    })
 
     return Session.of({
       state,
@@ -750,6 +791,7 @@ function makeSession() {
       setQuality: (height) => request({ quality: height }).pipe(Effect.asVoid),
       setRate: (fps) => request({ rate: fps }).pipe(Effect.asVoid),
       setFormat: (format) => request({ format }).pipe(Effect.asVoid),
+      resetCamera,
       setVoiceProcessing: (on) =>
         Effect.gen(function* () {
           yield* Ref.set(voiceProcessing, on)

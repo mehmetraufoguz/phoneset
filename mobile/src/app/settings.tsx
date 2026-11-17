@@ -1,10 +1,28 @@
 import { Button, FieldGroup, Host, Row, Spacer, Text } from "@expo/ui"
+import { Effect } from "effect"
 import * as Application from "expo-application"
 import { useRouter } from "expo-router"
+import { Alert } from "react-native"
+import { CameraPrefs } from "../core/cameraPrefs"
 import { LICENSE_URL, PRIVACY_URL, REPO_URL, SUPPORT_URL } from "../core/links"
-import { BRAND, useColors, useEntitlement, useOffers, useStoreActions } from "../ui/hooks"
+import { Session } from "../core/session"
+import { act, BRAND, useColors, useEntitlement, useOffers, useStoreActions } from "../ui/hooks"
 import { openUrl } from "../ui/open"
 import { subscriptionSection } from "../ui/subscriptionSection"
+
+/** Asks first, then forgets what was saved for every PC (and puts a connected one back to the defaults too). */
+const resetCameraChoices = () =>
+  Alert.alert("Reset camera choices?", "Every PC goes back to the default camera settings.", [
+    { text: "Cancel", style: "cancel" },
+    {
+      text: "Reset",
+      style: "destructive",
+      onPress: () =>
+        act(
+          Session.use((s) => s.resetCamera).pipe(Effect.andThen(CameraPrefs.use((p) => p.resetAll)))
+        )
+    }
+  ])
 
 export default function Settings() {
   const router = useRouter()
@@ -18,6 +36,16 @@ export default function Settings() {
     <Host style={{ flex: 1 }} seedColor={BRAND}>
       <FieldGroup>
         {subscriptionSection(subscription, colors)}
+
+        <FieldGroup.Section title="Camera">
+          <Button variant="text" label="Reset camera choices" onPress={resetCameraChoices} />
+          <FieldGroup.SectionFooter>
+            <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
+              The camera, size, smoothness and format you pick are remembered for each PC. This puts
+              them back to the defaults for every PC, whether or not one is connected.
+            </Text>
+          </FieldGroup.SectionFooter>
+        </FieldGroup.Section>
 
         <FieldGroup.Section title="Help">
           <Button variant="text" label="How it works" onPress={() => router.push("/help")} />
