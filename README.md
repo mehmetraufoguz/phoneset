@@ -2,14 +2,15 @@
 
 [![skills.sh](https://skills.sh/b/mehmetraufoguz/phoneset)](https://skills.sh/mehmetraufoguz/phoneset)
 
-Use your phone as your PC's **microphone** and **headphones** over Wi-Fi.
+Use your phone as your PC's **microphone**, **headphones** and **webcam** over Wi-Fi.
 
-The iPhone app is on the [App Store](https://apps.apple.com/app/id6828815833). The PC program and the
-source of both are here.
+The iPhone app is on the [App Store](https://apps.apple.com/app/id6828815833) (a paid app; the webcam is a
+subscription inside it). The PC program and the source of both are here.
 
 ```
  phone mic ──Wi-Fi──▶ phoneset (PC, terminal) ──▶ virtual cable ──▶ any app's microphone
  phone speaker ◀──Wi-Fi── phoneset (PC, terminal) ◀── what the PC is playing
+ phone camera ──Wi-Fi──▶ phoneset (PC, terminal) ──▶ "phoneset Camera" ──▶ any video app
 ```
 
 |                    |                                                                                                              |
@@ -17,8 +18,11 @@ source of both are here.
 | `pc/`              | The PC side. A Go program you run in a terminal, no window. Windows and macOS.                               |
 | `mobile/`          | The phone app. Expo (SwiftUI on iOS, Jetpack Compose on Android through Expo UI), logic written with Effect. |
 | `scripts/`         | `install-mac.sh` and `install-windows.ps1` (one-line installs) and `icons.py` (draws the icon).              |
+| `macos/`           | The virtual camera for macOS: a camera extension and its helper app, `phoneset Camera.app`.                   |
+| `windows/`         | The virtual camera for Windows: a DirectShow camera (from softcam) and `phoneset-camera.exe`.                 |
 | `skills/`          | An agent skill: how to install, use and troubleshoot phoneset (`npx skills add mehmetraufoguz/phoneset`).    |
 | `docs/protocol.md` | The wire protocol and its security model.                                                                    |
+| `docs/virtual-camera.md` | The virtual camera: how it fits together, what was run and what was not (numbers: `docs/webcam-measurements.md`). |
 
 ## Using it
 
@@ -145,7 +149,9 @@ In a terminal phoneset runs until you press Ctrl+C. To keep it running without a
 
 ```
 phoneset daemon              start in the background (tray icon on Windows and macOS)
-phoneset status              who is connected and what is streaming (--json for scripts)
+phoneset status              who is connected and what is streaming, and the camera (--json for scripts)
+phoneset camera              the webcam "phoneset Camera": status, install, uninstall (see "The webcam" below)
+phoneset video               where the phone's camera picture can be seen (--open: a local page)
 phoneset pair                QR code and code for the running service (--browser opens a page)
 phoneset stop
 phoneset logs                where the log is, and its last lines
@@ -157,7 +163,8 @@ The first `phoneset daemon` with no paired phone opens a pairing page in your br
 served by phoneset itself, reachable only from this PC, with the QR code and the code. The
 tray icon is the app's icon, with a green dot while a phone is connected. Its menu shows who
 is connected and what streams, and has **Pair a phone…**, **Disconnect phone**, **Paired
-phones** (forget one), **Start at login**, **Check for updates**, **Open log** and **Quit**.
+phones** (forget one), **Start at login**, **Check for updates**, a camera section (its state, **Install the camera…**,
+**Remove the camera**), **Open log** and **Quit**.
 
 Starting at login is opt-in. On Windows it adds a per-user entry under
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; on macOS it installs a LaunchAgent
@@ -191,9 +198,10 @@ npx skills add mehmetraufoguz/phoneset
 
 ### 2. On the phone
 
-**iPhone:** get it on the [App Store](https://apps.apple.com/app/id6828815833). It is a paid app;
-the source is open (MIT), so you can also build it yourself, as below. **Android:** not released
-yet; build it from source.
+**iPhone:** get it on the [App Store](https://apps.apple.com/app/id6828815833). It is a paid app, and the
+microphone and headphones need nothing more; the webcam is an auto-renewing subscription inside it (monthly or six
+months, at the store's price). The source is open (MIT), so you can also build it yourself, as below. **Android:** in a
+closed test on Google Play, not public yet; build it from source.
 
 The app uses native modules (audio engine, mDNS), so it runs as a development build, not
 in Expo Go.
@@ -232,6 +240,30 @@ sound different while it is on. It is not available on Android yet.
 If the phone can't find the PC: both must be on the same Wi-Fi (guest networks and
 "client isolation" block it), and the PC's firewall must allow phoneset on private networks.
 
+### 3. The webcam (optional)
+
+The phone's camera as a camera on the PC, called **phoneset Camera**, which video apps list like any webcam. It needs
+the program from v0.3.0 on (the camera files are on the release) and is installed on demand:
+
+```
+phoneset camera install      download the camera for this system from the latest release, check it, put it in place
+phoneset camera status       not installed / waiting for approval / switched off / ready
+phoneset camera uninstall
+phoneset video --open        see the phone's picture in a local page, without installing a camera
+```
+
+- **Windows 10:** a DirectShow camera and a helper, `phoneset-camera.exe`, in `C:\Program Files\phoneset\camera`. The
+  install shows one UAC window. Restart a browser that was open before it. The camera is 64-bit only.
+- **macOS 12.3 or later:** `phoneset Camera.app` in `/Applications` (signed with a Developer ID and notarized). macOS may
+  ask you to allow it: System Settings > General > Login Items & Extensions > Camera Extensions.
+- **On the phone:** connect to the PC, then in the **Camera** section switch on **Use as a webcam** (Back or Front, Quality,
+  Format, Smoothness are there too) and pick **phoneset Camera** in the video app. With no picture the camera shows a
+  slate, "Waiting for your phone".
+- The switch needs the subscription (or a redeemed code; **Restore purchases** is in the same section). A build you
+  make yourself has no store account: bundle it with `EXPO_PUBLIC_PHONESET_VIDEO_FREE=1` (`mobile/src/core/entitlement.ts`).
+- The picture is served on the PC's loopback interface only (`docs/protocol.md`, section 9). Before the camera existed,
+  OBS Studio's Browser source and Virtual Camera were the way (`docs/webcam-measurements.md`).
+
 ## How it's built
 
 **PC (Go, `pc/`).** `cmd/phoneset` is the CLI; `internal/` holds `proto` (wire types),
@@ -249,6 +281,13 @@ runs on a real-time audio thread. `audio/bridge.go` holds what both share (conve
 phone's 48 kHz mono to a device's format, and a device's audio to 20 ms stereo frames).
 Anywhere else, and macOS built with `CGO_ENABLED=0`, gets a synthetic development backend
 (a tone and a WAV dump) so the rest of the program still runs.
+
+**Camera (`macos/`, `windows/`, `pc/internal/camera`).** The program does not decode video (it stays free of cgo): it keeps
+the phone's frames and serves them on the loopback interface as `/video.frames`. A helper per system reads them, decodes
+with the system's own decoder (VideoToolbox, Media Foundation), turns the picture upright and feeds the camera: a Core Media
+I/O camera extension on macOS, a DirectShow filter on Windows. `pc/internal/camera` installs, removes and watches it behind
+one `Backend` interface; `phoneset camera`, the status line and the tray all go through it. The phone side is `src/core/camera.ts`,
+`videoChannel.ts`, `videoModes.ts` and `entitlement.ts` (the subscription), with `src/ui/cameraSection.tsx`.
 
 **Phone (Expo, `mobile/`).** `src/core` is platform-free Effect code: services
 (`Session`, `PairedPcs`, `Discovery`, `AudioIO`, `SocketFactory`, `KeyValue`, `Entropy`,
@@ -280,7 +319,9 @@ Tests are deliberately not committed to this repository.
 
 To publish a release, push a version tag: `git tag -a v0.2.0 -m "phoneset 0.2.0" && git push origin v0.2.0`. The
 **release** workflow builds the four archives (each with the license), writes `SHA256SUMS`, and publishes them;
-then edit the release notes by hand.
+then edit the release notes by hand. The camera files are not built by CI: `macos/release.sh --version X --upload vX` (signs,
+notarizes, staples) and `windows\release.ps1 -Upload vX` add `phoneset-camera-macos.zip` and `phoneset-camera-windows.zip`
+to a release and to its `SHA256SUMS`.
 
 ## Status
 
@@ -302,8 +343,16 @@ headphones then ran for 40 to 50 minutes without a problem. An iPhone 13 Pro pai
 native crypto module and streamed, and an Android 16 emulator paired and exchanged pings. The iPhone's echo
 cancellation switch was tried against that Windows PC too, and no problem was reported.
 
+The camera (0.3.x), as recorded in `docs/virtual-camera.md`: on macOS it was built and run on the developer's Mac, notarized,
+installed from the real v0.3.0 release by `phoneset camera install`, and the iPhone's picture was seen through it in Photo
+Booth. On Windows 10 the DirectShow camera and the helper were installed from that release (one UAC window), updated and
+removed, and an Android phone's picture was seen in Chrome, Edge and OBS. The Windows helper decodes H.264 in software:
+about 55 % of one core for a 1920 x 1080 stream at 30 frames a second.
+
 Not yet exercised:
 
+- the camera in Zoom, Teams, FaceTime or Meet, and the Windows Camera app; on Windows 11 and arm64; the camera's approval
+  on a fresh Mac; the tray's camera items and `phoneset update` refreshing the camera on Windows;
 - on macOS, **the audio content of the system-audio tap** (macOS delivers silence until the
   permission above is granted; use `phoneset test` to check), the BlackHole microphone path,
   capturing an input device, Intel Macs and macOS before 14.2, and the menu bar icon (the process
