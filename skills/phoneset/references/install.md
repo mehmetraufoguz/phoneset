@@ -1,5 +1,7 @@
 # Installing phoneset
 
+For a fresh machine, the requirements, what each step prints and how to remove everything, see `clean-install.md`.
+
 ## PC
 
 ### Windows 10 / 11

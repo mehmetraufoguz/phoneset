@@ -19,7 +19,10 @@ encrypted connection:
   It is installed on demand with `phoneset camera install`. Details: `references/camera.md`.
 
 Repository: https://github.com/mehmetraufoguz/phoneset. More detail: `references/install.md`,
-`references/commands.md`, `references/camera.md`, `references/troubleshooting.md`, `references/how-it-works.md`.
+`references/clean-install.md` (requirements, a clean install with what each step prints, removing everything),
+`references/commands.md`, `references/camera.md`, `references/diagnose.md` (what to ask, run and read when something is
+wrong, what to redact), `references/troubleshooting.md` (symptoms, and the known issues at its end),
+`references/how-it-works.md`.
 
 ## When helping someone
 
@@ -32,6 +35,9 @@ Repository: https://github.com/mehmetraufoguz/phoneset. More detail: `references
    once). Everything else the installers do stays in the user's own folders.
 3. **Verify each step with a command, don't guess**: `phoneset version`, `phoneset audio`, `phoneset status`,
    `phoneset test`, `phoneset camera status`. Report what they print.
+4. **When something is wrong, follow `references/diagnose.md`**: ask the situation questions, read the outputs above,
+   then go to the symptom in `references/troubleshooting.md`. Never ask for `devices.json` or `control.json` (tokens)
+   and cut the PC's name, the phone's name and addresses before anything is posted publicly.
 
 ## Install on the PC
 
@@ -120,3 +126,19 @@ the cable as the microphone: **CABLE Output** (Windows) or **BlackHole 2ch** (ma
   the camera was installed has to be restarted to list it. Which programs were really seen with it
   (Chrome, Edge and OBS on Windows 10; Photo Booth on a Mac) and what is not verified: `references/camera.md`.
 - The camera switch needs the subscription (or a redeemed code). Audio never does.
+- **The phone app and the PC program must be on the same protocol generation** (0.2.0 and later are the same). After the
+  phone app updates, run `phoneset update` on the PC; video needs a PC on 0.3.0 or newer. A mismatch looks like "can't
+  connect" (`references/diagnose.md`).
+- **Requirements** (iOS 16.4 or later, Android 7.0 or later, Windows 10/11, macOS 12 or later, and what was really run)
+  are in `references/clean-install.md`.
+
+## Help and reporting
+
+- A person's own help page: https://rauf.app/phoneset/support. What the app stores and sends:
+  https://rauf.app/phoneset/privacy.
+- Bugs and questions: https://github.com/mehmetraufoguz/phoneset/issues (what to include: `references/diagnose.md`, section 6).
+- Codes: a free copy of the app is redeemed in the App Store app (profile → Redeem Gift Card or Code) or at
+  play.google.com/redeem; a camera subscription code can also go in the app (Camera subscription section → **Redeem a
+  code**). A person who was sent a link from the author opens it, presses the button and gets the codes with the steps:
+  https://rauf.app/phoneset/claim. Cancelling a subscription is done in the App Store or Google Play, not by deleting
+  the app.

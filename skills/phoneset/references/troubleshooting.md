@@ -13,6 +13,9 @@ Start with `phoneset status`, `phoneset audio` and `phoneset logs`. Find the sym
   address (shown at start-up and by `phoneset status`) under "Can't see your PC?" in the pairing screen.
 - A VPN or virtual adapters can make the PC advertise addresses the phone can't reach; the QR code lists up to
   three addresses and the phone tries them all.
+- **Different versions.** A phone app and a PC program on different protocol generations (0.1.x against 0.2.0 or
+  later) do not talk at all. Run `phoneset version` on the PC and `phoneset update` if it is old (`diagnose.md`,
+  "The version rule").
 
 ## Pairing fails
 
@@ -115,6 +118,27 @@ Start with `phoneset camera status` and `phoneset status`.
 Wi-Fi jitter. Move closer or use 5 GHz, and check `phoneset status`/the app for dropped frames. The buffers
 (`audio.NewPlayout`, 60 ms) are tuned for normal home Wi-Fi.
 
+## Known issues and limits
+
+Seen or decided, not bugs to hunt:
+
+- **The camera subscription is checked when video starts.** A camera stream that is already running when a subscription
+  ends keeps going until it is stopped; the next start is refused. (Decided not to change.)
+- **iPhone, a long status line:** the **Disconnect** button's text could wrap badly ("Disc / onne / ct") when the line
+  above it is long. Seen in one layout, not fixed, not verified on every iPhone.
+- **macOS, Terminal.app** can't be granted the system-audio permission; iTerm2, the VS Code terminal or BlackHole 16ch can.
+- **One phone connected at a time.** A second phone replaces the first.
+- **The 6-digit pairing code** is weaker than the QR code against someone on the same network at that moment; use the QR
+  code on a network you don't trust.
+- **The Windows camera helper decodes in software**, so a 1080p camera can take a visible share of a CPU (`camera.md`).
+- **A portrait camera picture** is shown with bars at the sides in "phoneset Camera".
+- **Android** is a closed test; the repository's Status section still lists Android audio as not exercised on a device.
+- **iOS Live Activity** is off by default in a build from the repository (it needs an App Group registered by whoever builds
+  it); whether the store build has it was not checked.
+- **The camera in Zoom, Teams, FaceTime, Meet, the Windows Camera app, and Windows 11** was not verified (`camera.md`).
+
 ## Something else
 
-`phoneset --verbose` in a terminal shows debug logging. For protocol problems read `docs/protocol.md`.
+`phoneset --verbose` in a terminal shows debug logging (stop the background one first with `phoneset stop`). For
+protocol problems read `docs/protocol.md`. For a systematic start, `diagnose.md`; to report a bug, `diagnose.md`
+section 6.
