@@ -3,7 +3,9 @@
 ```
 phoneset [serve] [flags]      run in this terminal; Ctrl+C stops it
 phoneset daemon [flags]       start in the background and return (tray icon on Windows and macOS)
-phoneset status [--json]      what is running, who is connected, what streams
+phoneset status [--json]      what is running, who is connected, what streams, the camera
+phoneset camera [status|install|uninstall] [--force]    the virtual camera "phoneset Camera" (references/camera.md)
+phoneset video [--open|--mjpeg|--h264|--frames]   where the phone's camera picture can be seen (a local page; the raw stream addresses)
 phoneset pair [--browser]     fresh QR code and code for the running service (--browser: open the page)
 phoneset stop                 stop the background service
 phoneset logs                 log file path and its last 40 lines
@@ -13,7 +15,7 @@ phoneset test [--mic] [--seconds N]         headphone-source level meter, or a q
 phoneset phones               list paired phones
 phoneset forget <name|id|all> unpair a phone (put flags before the name)
 phoneset update [--check] [--force] [--json]    install the newest release if this build is behind it
-phoneset version              version and the commit it was built from, e.g. `phoneset 0.2.0 (3f2a9c1)`
+phoneset version              version and the commit it was built from, e.g. `phoneset 0.3.1 (3f2a9c1)`
 ```
 
 ## Updating
@@ -41,7 +43,7 @@ in a terminal is left alone (restart it yourself).
 | `--name NAME` | the name the phone shows for this PC (default: the computer's name) |
 | `--mic-device TEXT` | device the phone's microphone is played into: part of its name. Default: auto-detect a virtual cable |
 | `--speaker-device TEXT` | device whose audio goes to the phone. Default: the system default playback (Windows), system audio (macOS 14.2+) |
-| `--no-mic`, `--no-speaker` | disable one direction |
+| `--no-mic`, `--no-speaker`, `--no-video` | disable one direction (or the camera) |
 | `--tray` | show the tray icon while running in a terminal |
 | `--no-tray` | no tray icon in the background |
 | `--pair` | show pairing even when phones are already paired |
@@ -58,8 +60,8 @@ in a terminal is left alone (restart it yourself).
 The icon is the app's icon, with a green dot while a phone is connected. Menu: status, **Pair a phone…**
 (opens a local page with the QR code and code), **Disconnect phone**, **Paired phones** (forget one),
 **Start at login**, **Check for updates** (a click checks; if a newer build exists the same item becomes
-**Install update …**, and a background service restarts itself on the new build), **Open log**, the version,
-**Quit phoneset**.
+**Install update …**, and a background service restarts itself on the new build), a camera section (the camera's
+state, **Install the camera…**, **Remove the camera**), **Open log**, the version, **Quit phoneset**.
 
 ## Files
 
@@ -70,12 +72,15 @@ The icon is the app's icon, with a green dot while a phone is connected. Menu: s
 | `identity.json` | this PC's id and name | same |
 | `phoneset.log` | background service log (rotates at 2 MB to `.1`) | same |
 | `control.json` | port and token of the running instance, deleted on exit | same |
+| Virtual camera | `C:\Program Files\phoneset\camera` (DLL, helper, `version.txt`) | `/Applications/phoneset Camera.app` |
 | Start at login | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value `phoneset` | `~/Library/LaunchAgents/com.rapp.phoneset.plist` (+ `~/Library/Logs/phoneset-launchd.log`; 0.1.0 used `dev.mehmetraufoguz.phoneset`, which `autostart enable` and `disable` replace) |
 
 ## Network
 
 TCP 47831 (WebSocket `/v2/ws`, info at `/v2/info`) plus an mDNS service `_phoneset._tcp`. The control API
-and pairing page listen on `127.0.0.1` only, on a random port, and need the token from `control.json`.
+and pairing page listen on `127.0.0.1` only, on a random port, and need the token from `control.json`. The phone's
+camera picture is served on that same loopback interface (`/video.frames`, `/video.mjpg`, `/video.h264`; see
+`phoneset video` and `docs/protocol.md`, section 9); nothing else on the network can read it.
 
 ## Exit and error behaviour
 

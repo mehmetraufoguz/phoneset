@@ -73,6 +73,31 @@ Echo means the phone's microphone hears the phone's own speaker: PC audio plays 
   earphones.
 - **Android:** not available yet.
 
+## The camera: "phoneset Camera" is missing or shows no picture
+
+Start with `phoneset camera status` and `phoneset status`.
+
+- *not installed*: `phoneset camera install` (needs a release that carries it: v0.3.0 or newer).
+- *waiting for approval* / *switched off* (macOS): System Settings → General → Login Items & Extensions → Camera
+  Extensions → switch on phoneset Camera. Quit and reopen the video app.
+- Windows: the install asks for administrator rights once (UAC); if it was answered No nothing was installed. Restart
+  a browser that was open before the install. The camera is 64-bit only.
+- The video app lists the camera but shows a slate that says "Waiting for your phone": the phone is not sending.
+  On the phone switch **Use as a webcam** on.
+- The switch is greyed out: the line under it says why. "This PC can't receive video. Update phoneset on the PC"
+  (`phoneset update`), "Video is off on this PC" (the program was started with `--no-video`), or the phone can't send
+  its camera.
+- The switch turns itself back off with "The camera is a subscription. Subscribe in the section below to use it.":
+  subscribe, or **Restore purchases** / **Redeem a code** in the Camera subscription section. Audio is not affected.
+- The line under the switch says what is sent; "not open on the PC yet" means no program has opened "phoneset Camera".
+- `camera uninstall` on Windows fails because a program holds the DLL: it names the program (often Chrome); close it
+  and run it again. An update moves a held DLL aside instead.
+- High CPU on Windows while the camera runs: the helper decodes H.264 in software. Lower **Quality** in the app (not
+  measured on its own); numbers are in `camera.md`.
+- A front camera that looks mirrored in a browser's test page is the page's own self-view; the camera path is not
+  mirrored.
+- Verified programs and what is not verified: `camera.md`.
+
 ## The tray icon is missing
 
 - It lives in the Windows overflow area (the `^` by the clock) until pinned. On macOS it is in the menu bar.

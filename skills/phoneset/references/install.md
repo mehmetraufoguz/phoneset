@@ -61,11 +61,23 @@ Environment: `PHONESET_BIN_DIR` (install folder), `PHONESET_TARBALL` (install fr
 **The virtual microphone:** `brew install blackhole-2ch` (or https://existential.audio/blackhole/). Apps pick
 **BlackHole 2ch** as their microphone.
 
-A private fork answers 404 to both URLs. Use the GitHub CLI instead (`gh auth login` first):
+A private fork answers 404 to both URLs (the main repository is public). Use the GitHub CLI instead (`gh auth login` first):
 
 ```sh
 gh api repos/<owner>/<repo>/contents/scripts/install-mac.sh -H "Accept: application/vnd.github.raw" | sh
 ```
+
+### The virtual camera (optional, v0.3.0 or newer)
+
+After the program is installed (new terminal, so `phoneset` is on the PATH):
+
+```sh
+phoneset camera install     # downloads the camera for this system from the latest release and checks it
+phoneset camera status
+```
+
+Windows shows one UAC window; macOS may need an approval in System Settings (General → Login Items & Extensions →
+Camera Extensions). Details, what was verified and removal: `camera.md`.
 
 ### From source
 
@@ -83,8 +95,11 @@ audio. Release archives are built by `.github/workflows/release.yml` when a `vX.
 
 ## Phone
 
-The app uses native modules (audio engine, mDNS, camera), so it needs a development build; Expo Go can't
-run it. From the repository root:
+**iPhone:** the App Store, https://apps.apple.com/app/id6828815833 (a paid app; the camera is a subscription inside
+it). **Android:** not public yet (a closed test on Google Play); build it from source for now.
+
+To build either yourself: the app uses native modules (audio engine, mDNS, camera), so it needs a development
+build; Expo Go can't run it. From the repository root:
 
 ```sh
 pnpm install
@@ -92,7 +107,8 @@ pnpm mobile:ios         # Xcode, an Apple Developer team for a real device
 pnpm mobile:android     # Android Studio / SDK
 ```
 
-- iOS asks for **Local Network** (to find the PC), **Microphone** and **Camera** (to scan the QR code).
+- iOS asks for **Local Network** (to find the PC), **Microphone**, and **Camera** (to scan the QR code and to send
+  its picture as a webcam).
 - Check free disk space first: a native iOS build writes several GB.
 - The iOS Live Activity (lock screen / Dynamic Island) is off by default because its widget extension needs an
   App Group registered once in the Apple Developer account (`group.com.rapp.phoneset`). Then:
@@ -113,6 +129,7 @@ phone app for new phone-side features: updating the PC side never touches the ph
 
 ```sh
 phoneset autostart disable
+phoneset camera uninstall     # if the virtual camera was installed (Windows: close a program that holds it)
 phoneset stop
 phoneset forget all           # optional: unpair every phone
 ```

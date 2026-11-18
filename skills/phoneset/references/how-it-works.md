@@ -3,6 +3,7 @@
 ```
 phone mic ──Wi-Fi──▶ phoneset (PC) ──▶ virtual cable ──▶ any app's microphone
 phone speaker ◀──Wi-Fi── phoneset (PC) ◀── what the PC is playing
+phone camera ──Wi-Fi──▶ phoneset (PC) ──▶ camera helper ──▶ "phoneset Camera" ──▶ any video app
 ```
 
 ## Pieces
@@ -15,7 +16,11 @@ phone speaker ◀──Wi-Fi── phoneset (PC) ◀── what the PC is playin
   protocol, the encrypted channel, the session state machine that reconnects after a drop). `src/platform`
   has the native pieces (audio engine, mDNS, secure storage). Screens use Expo UI's universal components
   (SwiftUI on iOS, Jetpack Compose on Android).
+- `macos/` is the virtual camera for macOS (a Core Media I/O camera extension and a helper app, `phoneset Camera.app`);
+  `windows/` is the one for Windows (a DirectShow filter from softcam plus `phoneset-camera.exe`). `pc/internal/camera`
+  is the part of the program that installs, removes and watches them, the same on every system.
 - `docs/protocol.md` is the wire protocol and threat model. Read it before changing anything on the wire.
+  `docs/virtual-camera.md` and `docs/webcam-measurements.md` are the camera's plan, what was run and the numbers.
 
 ## Audio
 
@@ -35,6 +40,17 @@ glitches when Wi-Fi gets bad.
 **Battery:** a field report: about 40 minutes of streaming with wired earphones used 2–3 % of an iPhone's
 battery with no warming.
 
+## Video
+
+The phone films and sends H.264 or JPEG frames (the app picks the codec; sizes from 480p to 4K and 30 or 60 frames a
+second, as far as the phone's camera and the PC allow). The PC program does not decode them (it stays a plain Go
+program, no cgo): it keeps the frames and serves them on the loopback interface (`/video.frames` with codec, size,
+rotation and mirror per frame, plus the raw `/video.mjpg` and `/video.h264`). The camera helper reads
+`/video.frames`, decodes with the system's own decoder (VideoToolbox on macOS, Media Foundation on Windows), turns the
+picture upright, fits it into the camera's frame (a portrait picture gets bars at the sides) and hands it to the
+virtual camera. With no picture the camera shows its own slate. The camera is a subscription in the app (gated when
+video starts); the microphone and the headphones are not.
+
 ## Security
 
 Every connection starts with a P-256 key exchange and everything after it is AES-256-GCM with keys
@@ -51,5 +67,7 @@ header. Details and the threat model: `docs/protocol.md`.
 - iOS has no notification that can't be dismissed; the nearest is a Live Activity (opt-in, see install.md).
 - macOS: the system-audio tap exists from 14.2 and needs permission; before that, capture a virtual input
   device (BlackHole 16ch behind a Multi-Output device).
-- Android: built and wired, but not yet exercised on a device by the author.
+- Android: in a closed test on Google Play, not public. The camera and the subscription flow were run on a real
+  phone; the repository's Status section still lists Android audio as not exercised on a device.
+- The virtual camera is verified on Windows 10 and on one Mac only (see `camera.md`); Linux has none.
 - A phone suspended in the background by iOS drops the connection unless the microphone or headphones are on.
