@@ -34,7 +34,14 @@ subscription inside it). The PC program and the source of both are here.
 
 #### Windows 10/11
 
-One line in PowerShell (no administrator rights; downloads the latest release, puts `phoneset.exe` in
+With [Scoop](https://scoop.sh) (64-bit; the manifest lives in [scoop-phoneset](https://github.com/mehmetraufoguz/scoop-phoneset)):
+
+```powershell
+scoop bucket add phoneset https://github.com/mehmetraufoguz/scoop-phoneset
+scoop install phoneset
+```
+
+Or one line in PowerShell (no administrator rights; downloads the latest release, puts `phoneset.exe` in
 `%LOCALAPPDATA%\phoneset\bin` and adds that folder to your user `PATH`):
 
 ```powershell
@@ -374,8 +381,10 @@ Not yet exercised:
   first section, so the stream switches are missing), and background operation;
 - the tray's update item, and the Windows ARM and Intel Mac builds beyond what CI compiles;
 - the package managers: `brew install mehmetraufoguz/tap/phoneset` was run on an Apple silicon Mac (installed from the
-  tap, `brew test` passed, removed again), but not on an Intel Mac, and the Scoop bucket
-  ([scoop-phoneset](https://github.com/mehmetraufoguz/scoop-phoneset)) has not been installed on a Windows PC yet.
+  tap, `brew test` passed, removed again), but not on an Intel Mac. The Scoop bucket
+  ([scoop-phoneset](https://github.com/mehmetraufoguz/scoop-phoneset)) was installed from, run (`phoneset version`,
+  `phoneset status` against a running service) and removed on a Windows PC (AMD64), but not on Windows ARM. Both the
+  Homebrew formula and the Scoop manifest name one release, so they need a version and hash edit for each new release.
 
 Expect to tune the jitter buffer (`audio.NewPlayout`, 60 ms target) on your Wi-Fi.
 
