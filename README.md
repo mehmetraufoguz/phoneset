@@ -7,6 +7,10 @@ Use your phone as your PC's **microphone**, **headphones** and **webcam** over W
 The iPhone app is on the [App Store](https://apps.apple.com/app/id6828815833) (a paid app; the webcam is a
 subscription inside it). The PC program and the source of both are here.
 
+<p align="center">
+  <img src="docs/demo.gif" width="720" alt="Animated demo: the iPhone app connects to a PC over Wi-Fi and becomes its microphone, headphones and webcam">
+</p>
+
 ```
  phone mic ──Wi-Fi──▶ phoneset (PC, terminal) ──▶ virtual cable ──▶ any app's microphone
  phone speaker ◀──Wi-Fi── phoneset (PC, terminal) ◀── what the PC is playing
