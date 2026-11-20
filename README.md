@@ -97,7 +97,14 @@ Pairings are stored in `%AppData%\phoneset\`.
 
 #### macOS (12 or later)
 
-One line (downloads the latest release, installs `phoneset` to `~/.local/bin`, adds it to your `PATH`):
+With [Homebrew](https://brew.sh) (the formula lives in [homebrew-tap](https://github.com/mehmetraufoguz/homebrew-tap)):
+
+```sh
+brew install mehmetraufoguz/tap/phoneset
+brew install blackhole-2ch    # the virtual microphone, see below
+```
+
+Or one line (downloads the latest release, installs `phoneset` to `~/.local/bin`, adds it to your `PATH`):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/mehmetraufoguz/phoneset/main/scripts/install-mac.sh | sh -s -- --start
@@ -189,7 +196,8 @@ the new binary once to be sure it works, replaces the old one and restarts the b
 same flags. A copy running in a terminal is left alone: restart it yourself. The tray menu has the same
 thing (**Check for updates**, then **Install update …**). Nothing checks by itself: the only requests go out
 when you ask. For a private fork set `GITHUB_TOKEN`, or sign in with `gh auth login`. Updating the PC side
-doesn't touch the phone app.
+doesn't touch the phone app. If you installed with Homebrew, update with `brew upgrade phoneset` instead, so
+Homebrew's record of the version stays right.
 
 ### For AI agents
 
@@ -364,7 +372,10 @@ Not yet exercised:
 - the Live Activity (needs the App Group above, so it has not been built), the Android notification,
   audio on Android (the Android build runs on an emulator and pairs, but its session screen shows only its
   first section, so the stream switches are missing), and background operation;
-- the tray's update item, and the Windows ARM and Intel Mac builds beyond what CI compiles.
+- the tray's update item, and the Windows ARM and Intel Mac builds beyond what CI compiles;
+- the package managers: `brew install mehmetraufoguz/tap/phoneset` was run on an Apple silicon Mac (installed from the
+  tap, `brew test` passed, removed again), but not on an Intel Mac, and the Scoop bucket
+  ([scoop-phoneset](https://github.com/mehmetraufoguz/scoop-phoneset)) has not been installed on a Windows PC yet.
 
 Expect to tune the jitter buffer (`audio.NewPlayout`, 60 ms target) on your Wi-Fi.
 
