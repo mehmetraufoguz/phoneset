@@ -1,25 +1,19 @@
-import { Button, FieldGroup, Host, Row, Slider, Spacer, Switch, Text } from "@expo/ui"
+import { Button, FieldGroup, Host, Text } from "@expo/ui"
 import { useKeepAwake } from "expo-keep-awake"
 import { useRouter } from "expo-router"
-import { Platform } from "react-native"
-import { Session, type SessionState, type StreamStatus } from "../core/session"
-import { cameraSection } from "../ui/cameraSection"
-import {
-  act,
-  BRAND,
-  useColors,
-  useEntitlement,
-  useOffers,
-  useSessionState,
-  useStoreActions
-} from "../ui/hooks"
-import { type SubscriptionView, subscriptionSection } from "../ui/subscriptionSection"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { ScrollView, View } from "react-native"
+import { Session } from "../core/session"
+import { ConnectedView } from "../ui/connectedView"
+import { DimScreen } from "../ui/dimScreen"
+import { act, BRAND, useColors, usePalette, useScreenChoices, useSessionState } from "../ui/hooks"
 
 export default function SessionScreen() {
   const router = useRouter()
   const state = useSessionState()
   const colors = useColors()
-  const subscription = { state: useEntitlement(), offers: useOffers(), actions: useStoreActions() }
+  const palette = usePalette()
+  const { autoDimSeconds } = useScreenChoices()
 
   // The phone is a live microphone here: keep it awake while this screen is open.
   useKeepAwake()
@@ -31,12 +25,51 @@ export default function SessionScreen() {
     router.back()
   }
 
+  // Dim screen: a black cover over the controls while the camera runs. It starts by itself after `autoDimSeconds` without
+  // a touch (when that is not 0) and only while the camera is on; a touch on the controls starts the wait again.
+  const cameraOn = state._tag === "Connected" && state.video.on
+  const [dimmed, setDimmed] = useState(false)
+  const [since, setSince] = useState(() => Date.now())
+  const idle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => {
+    if (cameraOn) setSince(Date.now())
+    else setDimmed(false)
+  }, [cameraOn])
+
+  const arm = useCallback(() => {
+    clearTimeout(idle.current)
+    if (cameraOn && autoDimSeconds > 0 && !dimmed) {
+      idle.current = setTimeout(() => setDimmed(true), autoDimSeconds * 1000)
+    }
+  }, [cameraOn, autoDimSeconds, dimmed])
+
+  useEffect(() => {
+    arm()
+    return () => clearTimeout(idle.current)
+  }, [arm])
+
+  if (state._tag === "Connected") {
+    return (
+      <View style={{ flex: 1, backgroundColor: palette.bg }} onTouchStart={arm}>
+        <ScrollView contentInsetAdjustmentBehavior="automatic">
+          <ConnectedView
+            state={state}
+            autoDimSeconds={autoDimSeconds}
+            onDim={() => setDimmed(true)}
+            onMore={() => router.push("/more")}
+            onDisconnect={disconnect}
+          />
+        </ScrollView>
+        <DimScreen visible={dimmed && cameraOn} since={since} onWake={() => setDimmed(false)} />
+      </View>
+    )
+  }
+
   return (
     <Host style={{ flex: 1 }} seedColor={BRAND}>
       <FieldGroup>
-        {state._tag === "Connected" ? (
-          connectedSections(state, colors, disconnect, subscription)
-        ) : state._tag === "Failed" ? (
+        {state._tag === "Failed" ? (
           <FieldGroup.Section title="Couldn't connect">
             <Text textStyle={{ color: colors.danger }}>{state.message}</Text>
             {state.code === "unknown_device" || state.code === "bad_server" ? null : (
@@ -54,108 +87,5 @@ export default function SessionScreen() {
         )}
       </FieldGroup>
     </Host>
-  )
-}
-
-// A plain function, not a component: FieldGroup only lays out Sections that are its direct children
-// (or inside a Fragment). A component in between is treated as one row, and on Android its Sections
-// then never show.
-function connectedSections(
-  state: Extract<SessionState, { _tag: "Connected" }>,
-  colors: ReturnType<typeof useColors>,
-  onDisconnect: () => void,
-  subscription: SubscriptionView
-) {
-  const detail = (s: StreamStatus, on: string, off: string) =>
-    s.error ?? (s.on ? on : s.available ? off : "Not available on this PC")
-
-  const diagnostics = [
-    state.mic.on && state.stats
-      ? `Mic buffer ${state.stats.mic.bufferMs} ms, ${state.stats.mic.underruns} gaps`
-      : "",
-    state.speaker.on && state.stats ? `${state.stats.speaker.dropped} frames dropped` : ""
-  ]
-    .filter((line) => line !== "")
-    .join("  ·  ")
-
-  return (
-    <>
-      <FieldGroup.Section title={state.pc.name}>
-        <Row alignment="center" spacing={8}>
-          <Text textStyle={{ color: colors.ok, fontWeight: "600" }}>Connected</Text>
-          <Spacer flexible />
-          <Text textStyle={{ color: colors.secondary }}>
-            {state.rttMs === null ? "measuring…" : `${state.rttMs} ms`}
-          </Text>
-        </Row>
-      </FieldGroup.Section>
-
-      <FieldGroup.Section title="Use this phone as">
-        <Switch
-          label="Microphone"
-          value={state.mic.on}
-          disabled={state.mic.busy || !state.mic.available}
-          onValueChange={(on) => act(Session.use((s) => s.setMic(on)))}
-        />
-        <Text
-          textStyle={{ fontSize: 13, color: state.mic.error ? colors.danger : colors.secondary }}
-        >
-          {detail(state.mic, `Sending to ${state.mic.device ?? "the PC"}`, "Off")}
-        </Text>
-        {state.mic.on ? (
-          <Slider
-            value={Math.min(1, Math.sqrt(state.micLevel) * 1.6)}
-            onValueChange={() => {}}
-            disabled
-          />
-        ) : null}
-
-        <Switch
-          label="Headphones"
-          value={state.speaker.on}
-          disabled={state.speaker.busy || !state.speaker.available}
-          onValueChange={(on) => act(Session.use((s) => s.setSpeaker(on)))}
-        />
-        <Text
-          textStyle={{
-            fontSize: 13,
-            color: state.speaker.error ? colors.danger : colors.secondary
-          }}
-        >
-          {detail(state.speaker, `Playing ${state.speaker.device ?? "PC audio"}`, "Off")}
-        </Text>
-      </FieldGroup.Section>
-
-      {cameraSection(state.video, colors)}
-      {subscriptionSection(subscription, colors)}
-
-      <FieldGroup.Section title="Sound">
-        {Platform.OS === "ios" ? (
-          <>
-            <Switch
-              label="Echo cancellation"
-              value={state.echoCancellation}
-              onValueChange={(on) => act(Session.use((s) => s.setVoiceProcessing(on)))}
-            />
-            <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
-              Keeps the sound from the phone's own speaker out of its microphone. It puts the phone
-              in its voice-call audio mode, so the PC's audio may sound different while it is on.
-              Earphones avoid echo altogether.
-            </Text>
-          </>
-        ) : (
-          <Text textStyle={{ fontSize: 13, color: colors.secondary }}>
-            Echo cancellation isn't available on Android yet. Earphones avoid echo altogether.
-          </Text>
-        )}
-        {diagnostics === "" ? null : (
-          <Text textStyle={{ fontSize: 13, color: colors.secondary }}>{diagnostics}</Text>
-        )}
-      </FieldGroup.Section>
-
-      <FieldGroup.Section>
-        <Button variant="outlined" label="Disconnect" onPress={onDisconnect} />
-      </FieldGroup.Section>
-    </>
   )
 }

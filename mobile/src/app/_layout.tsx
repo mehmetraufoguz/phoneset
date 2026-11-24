@@ -19,6 +19,7 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen name="session" options={{ title: "Connected PC", gestureEnabled: false }} />
+        <Stack.Screen name="more" options={{ title: "More" }} />
       </Stack>
     </>
   )

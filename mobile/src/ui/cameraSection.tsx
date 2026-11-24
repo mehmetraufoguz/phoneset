@@ -8,7 +8,7 @@ import { act, type useColors } from "./hooks"
 type Colors = ReturnType<typeof useColors>
 
 /** The line under the switch: why it can't be used, how it is going, or what is being sent. */
-function detailOf(v: VideoStatus): { text: string; problem: boolean } {
+export function detailOf(v: VideoStatus): { text: string; problem: boolean } {
   if (v.error) return { text: v.error, problem: true }
   if (v.unavailable) return { text: v.unavailable, problem: false }
   if (v.busy) return { text: "Starting…", problem: false }
