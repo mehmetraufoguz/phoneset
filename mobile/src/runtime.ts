@@ -2,6 +2,7 @@ import { Layer, ManagedRuntime } from "effect"
 import { CameraPrefs } from "./core/cameraPrefs"
 import { Entitlement } from "./core/entitlement"
 import { Presence } from "./core/presence"
+import { ScreenPrefs } from "./core/screenPrefs"
 import { Session } from "./core/session"
 import { SocketFactory } from "./core/socket"
 import { PairedPcs } from "./core/storage"
@@ -31,6 +32,7 @@ export const AppLayer = Presence.watcher.pipe(
   Layer.provideMerge(Session.layer),
   Layer.provideMerge(Entitlement.layer),
   Layer.provideMerge(CameraPrefs.layer),
+  Layer.provideMerge(ScreenPrefs.layer),
   Layer.provideMerge(PairedPcs.layer),
   Layer.provideMerge(PlatformLive)
 )

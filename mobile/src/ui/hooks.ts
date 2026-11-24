@@ -4,6 +4,7 @@ import { AppState, useColorScheme } from "react-native"
 import { Discovery } from "../core/discovery"
 import { Entitlement, type EntitlementState, type Offer } from "../core/entitlement"
 import type { StoreError } from "../core/errors"
+import { DEFAULT_SCREEN, type ScreenChoices, ScreenPrefs } from "../core/screenPrefs"
 import { Session, type SessionState } from "../core/session"
 import { PairedPcs } from "../core/storage"
 import { type AppServices, runtime } from "../runtime"
@@ -75,6 +76,31 @@ export function useColors() {
     secondary: dark ? "#98989F" : "#6C6C70",
     danger: dark ? "#FF6961" : "#D70015",
     ok: dark ? "#32D74B" : "#248A3D"
+  }
+}
+
+const screenChoices = ScreenPrefs.use((p) => p.get).pipe(Effect.orElseSucceed(() => DEFAULT_SCREEN))
+
+/** The saved screen choices (auto-dim). Read when the screen opens and again when `refresh` changes. */
+export const useScreenChoices = (refresh = 0): ScreenChoices =>
+  useEffectValue(screenChoices, DEFAULT_SCREEN, refresh)
+
+/** Colours for the screens drawn with plain views (the connected PC); they follow the phone's light or dark setting. */
+export function usePalette() {
+  const dark = useColorScheme() === "dark"
+  const { ok, danger, secondary } = useColors()
+  return {
+    dark,
+    ok,
+    danger,
+    sub: secondary,
+    bg: dark ? "#000000" : "#F2F2F7",
+    surface: dark ? "#141416" : "#FFFFFF",
+    raised: dark ? "#1C1C1F" : "#E9E9EE",
+    line: dark ? "#26262A" : "#D8D8DE",
+    text: dark ? "#F2F2F4" : "#111113",
+    onBg: dark ? "#101A33" : "#EAF0FF",
+    onLine: dark ? "#2A4290" : "#9DB4FF"
   }
 }
 
