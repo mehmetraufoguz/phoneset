@@ -9,7 +9,7 @@ import {
   Stream,
   SubscriptionRef
 } from "effect"
-import { AudioIO, type Player } from "./audio"
+import { AudioIO, type Player, type PlayerStats } from "./audio"
 import { fromBase64, toBase64, u32be, utf8 } from "./bytes"
 import { CameraIO, type Facing } from "./camera"
 import { CameraPrefs, DEFAULT_CHOICES } from "./cameraPrefs"
@@ -84,6 +84,8 @@ export type SessionState =
       readonly rttMs: number | null
       readonly micLevel: number
       readonly stats: StatsMessage | null
+      /** What the phone's own speaker queue is doing (read every 2 s while the headphones are on), or null. */
+      readonly playback: PlayerStats | null
       /** The phone's voice-call audio mode, which cancels the echo of its own speaker. */
       readonly echoCancellation: boolean
     }
@@ -398,6 +400,7 @@ function makeSession() {
           rttMs: null,
           micLevel: 0,
           stats: null,
+          playback: null,
           echoCancellation: yield* Ref.get(voiceProcessing)
         })
 
@@ -433,9 +436,25 @@ function makeSession() {
           Effect.gen(function* () {
             const p = yield* audio.openPlayer
             yield* Ref.set(player, p)
+            // The queue's level, its target and how often it ran dry, for the More screen.
+            yield* Effect.forkChild(
+              Effect.forever(
+                p.stats.pipe(
+                  Effect.flatMap((playback) => whenConnected((s) => ({ ...s, playback }))),
+                  Effect.andThen(Effect.sleep("2 seconds"))
+                )
+              )
+            )
             return yield* Effect.never
           })
-        ).pipe(Effect.catch(audioFailure("speaker")), Effect.ensuring(Ref.set(player, null)))
+        ).pipe(
+          Effect.catch(audioFailure("speaker")),
+          Effect.ensuring(
+            Ref.set(player, null).pipe(
+              Effect.andThen(whenConnected((s) => ({ ...s, playback: null })))
+            )
+          )
+        )
 
         const applyStream = (m: Extract<ServerMessage, { t: "stream" }>) =>
           Effect.gen(function* () {

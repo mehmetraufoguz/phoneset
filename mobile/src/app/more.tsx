@@ -65,7 +65,10 @@ function ConnectedOptions({
     state.mic.on && state.stats
       ? `Mic buffer ${state.stats.mic.bufferMs} ms, ${state.stats.mic.underruns} gaps`
       : "",
-    state.speaker.on && state.stats ? `${state.stats.speaker.dropped} frames dropped` : ""
+    state.speaker.on && state.stats ? `${state.stats.speaker.dropped} frames dropped` : "",
+    state.speaker.on && state.playback
+      ? `Speaker queue ${state.playback.queuedMs} ms of ${state.playback.targetMs}, ${state.playback.underruns} gaps, ${state.playback.drops} cut`
+      : ""
   ].filter((line) => line !== "")
 
   return (
