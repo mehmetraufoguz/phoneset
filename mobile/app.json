@@ -10,7 +10,7 @@
     "ios": {
       "bundleIdentifier": "com.rapp.phoneset",
       "appleTeamId": "JY83GWM55C",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
