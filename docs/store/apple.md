@@ -32,9 +32,10 @@ EU trader status.
 
 | Field              | Limit                                                          | Text                                                                                                                                                        |
 | ------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Subtitle           | 30 characters                                                  | `Mic and headphones for a PC` (27)                                                                                                                          |
-| Promotional text   | 170 characters                                                 | `Use your iPhone as a wireless microphone and headphones for your Windows PC or Mac. Pair once with a QR code, then it all runs over your own Wi-Fi.` (147) |
-| Keywords           | 100 bytes, each longer than 2 characters, no other apps' names | `microphone,wireless,windows,mac,audio,wifi,stream,voice,virtual,cable,speaker,gaming,computer` (93)                                                        |
+| Name               | 30 characters                                                  | `phoneset: PC Webcam & Mic` (25)                                                                                                                            |
+| Subtitle           | 30 characters                                                  | `Phone as camera & headphones` (28)                                                                                                                         |
+| Promotional text   | 170 characters                                                 | `Your iPhone as a PC webcam, microphone and headphones over your own Wi-Fi. No account, no ads, no server in the middle. Pair once with a QR code.` (146) |
+| Keywords           | 100 bytes, each longer than 2 characters, no other apps' names | `microphone,wireless,wifi,audio,voice,speaker,earphones,windows,mac,stream,gaming,video,call,iphone` (98)                                                    |
 | Support URL        | required                                                       | `https://rauf.app/phoneset/support/`                                                                                                                        |
 | Marketing URL      | optional                                                       | `https://rauf.app/phoneset/`                                                                                                                                |
 | Privacy Policy URL | required                                                       | `https://rauf.app/phoneset/privacy/`                                                                                                                        |
@@ -42,29 +43,18 @@ EU trader status.
 | Categories         |                                                                | Utilities (primary), Productivity (secondary)                                                                                                               |
 | What's New         | not available for the first version                            |                                                                                                                                                             |
 
-### Planned ASO update (not applied; needs a new app version)
+### ASO history
 
-Written on 2026-11-08 from Apple's search and product page guidance (developer.apple.com/app-store/search,
-/app-store/product-page). Search ranks on the name, subtitle, keywords and primary category, plus downloads and
-ratings. Promotional text does not affect ranking, and Apple does not say that the description does. The subtitle
-and the description can only change with a new version; Apple does not say that for the name or the keywords.
+The plan written on 2026-11-08 (search ranks on the name, subtitle, keywords and primary category, plus downloads and
+ratings; promotional text does not affect ranking; the subtitle and the description change only with a new version) was
+replaced by the camera release's listing, which went live with 0.3.1 (2026-11-17 to 2026-11-18) and is what the table
+above shows: the name `phoneset: PC Webcam & Mic`, the subtitle `Phone as camera & headphones`, and keywords that add
+`earphones`, `video`, `call` and `iphone` and drop `virtual,cable`. Version 0.3.2 carries all of it over unchanged.
 
-Decision (2026-11-08): this does not get a release of its own. It ships with the next iOS release that carries a
-feature change, and the strings below are checked again at that point.
-
-| Field                | Live now                                                                                       | Planned                                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Subtitle (30)        | `Mic and headphones for a PC` (27)                                                             | `Phone as PC mic & headphones` (28)                                                                |
-| Keywords (100 bytes) | `microphone,wireless,windows,mac,audio,wifi,stream,voice,virtual,cable,speaker,gaming,computer` (93) | `microphone,wireless,windows,mac,wifi,audio,voice,speaker,stream,gaming,iphone,earphones,computer` (96) |
-| Name (30)            | `phoneset`                                                                                     | **undecided**, see below                                                                           |
-
-- The planned keywords repeat no word of the subtitle, the name or the categories, which Apple asks for.
-- `virtual,cable` are dropped on a guess that fewer people search for them. It is untested: there is no keyword data.
+- The keywords repeat no word of the subtitle, the name or the categories, which Apple asks for.
 - `iphone` is Apple's own trademark. Apple forbids unauthorized trademark terms and says nothing about its own;
   drop it if App Review objects.
-- The name `phoneset: Phone as PC Mic` (25) would add the words people search for, but Apple asks for a simple name
-  that hints at what the app does, and the App Review rule on names was not read. Keep `phoneset` unless the owner
-  decides otherwise.
+- `virtual,cable` were dropped on a guess that fewer people search for them. It is untested: there is no keyword data.
 - Measure before and after in App Store Connect, Analytics, source type App Store Search. With a handful of
   downloads a change cannot be told from noise, so give each change a few weeks.
 
