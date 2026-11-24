@@ -1,8 +1,10 @@
 import { Effect, Layer, Queue, Stream } from "effect"
+import { requireOptionalNativeModule } from "expo"
 import { AudioContext, AudioManager, AudioRecorder } from "react-native-audio-api"
 import { AudioIO, type AudioOptions, type Player } from "../core/audio"
 import { FRAME_SAMPLES, SAMPLE_RATE } from "../core/constants"
 import { AudioError } from "../core/errors"
+import { fadeIn, JitterTarget } from "../core/jitter"
 import { Chunker, deinterleaveStereo, floatToS16, Resampler } from "../core/pcm"
 
 const audioError = (message: string) => (cause: unknown) =>
@@ -12,6 +14,17 @@ const audioError = (message: string) => (cause: unknown) =>
 
 let voiceProcessing = false
 let sessionUsers = 0
+
+// Android only: keeps Wi-Fi out of power saving while sound is streaming. With the screen off the radio otherwise hands
+// frames over in groups about every 100 ms. Not present on iOS, nor in a build made before it was added.
+const wifi = requireOptionalNativeModule<{ setWifiLock?(on: boolean): boolean }>("PhonesetCamera")
+const holdWifi = (on: boolean) => {
+  try {
+    wifi?.setWifiLock?.(on)
+  } catch {
+    // Not worth failing the stream for.
+  }
+}
 
 const applySessionOptions = Effect.try({
   try: () => {
@@ -41,6 +54,7 @@ const configure = (options: AudioOptions) => {
 const useSession = Effect.acquireRelease(
   Effect.gen(function* () {
     if (sessionUsers++ === 0) {
+      holdWifi(true)
       yield* applySessionOptions
       yield* Effect.tryPromise({
         try: () => AudioManager.setAudioSessionActivity(true),
@@ -50,7 +64,10 @@ const useSession = Effect.acquireRelease(
   }),
   () =>
     Effect.promise(async () => {
-      if (--sessionUsers === 0) await AudioManager.setAudioSessionActivity(false).catch(() => {})
+      if (--sessionUsers === 0) {
+        holdWifi(false)
+        await AudioManager.setAudioSessionActivity(false).catch(() => {})
+      }
     })
 )
 
@@ -107,8 +124,10 @@ const mic = Stream.callback<Uint8Array, AudioError>(
 
 // ------------------------------------------------------------------- speaker
 
-const CUSHION_MS = 60
-const MAX_QUEUED_MS = 220
+/** How far above the cushion the queue may grow (a burst after a stall) before the oldest audio is dropped. */
+const HEADROOM_MS = 160
+/** The first 4 ms of sound after a gap rise from silence. */
+const FADE_IN_SAMPLES = (SAMPLE_RATE * 4) / 1000
 /** Playback speed follows the queue length by up to this much, absorbing clock drift. */
 const MAX_RATE_ADJUST = 0.02
 
@@ -146,6 +165,7 @@ const openPlayer = Effect.gen(function* () {
       })
   )
 
+  const jitter = new JitterTarget()
   const queue: Queued[] = []
   let queued = 0
   let started = false
@@ -170,21 +190,29 @@ const openPlayer = Effect.gen(function* () {
       queued -= queue[i]?.samples ?? 0
       queue.splice(i, 1)
     }
-    if (isLastBufferInQueue && queue.length === 0) underruns++
+    if (isLastBufferInQueue && queue.length === 0) {
+      underruns++
+      jitter.underrun(Date.now())
+    }
   }
 
   const write = (pcm: Uint8Array) =>
     Effect.try({
       try: () => {
-        // After silence or an underrun the queue is empty: rebuild the cushion first.
-        if (queue.length === 0) {
-          enqueue(new Float32Array((SAMPLE_RATE * CUSHION_MS) / 1000), null)
-        }
+        const now = Date.now()
+        jitter.arrive(now)
+        const target = jitter.target(now)
         const [left, right] = deinterleaveStereo(pcm)
+        // After silence or an underrun the queue is empty: rebuild the cushion first, and start the sound from silence.
+        if (queue.length === 0) {
+          enqueue(new Float32Array((SAMPLE_RATE * target) / 1000), null)
+          fadeIn(left, FADE_IN_SAMPLES)
+          fadeIn(right, FADE_IN_SAMPLES)
+        }
         enqueue(left, right)
 
         // Clock drift or a burst after a stall: drop the oldest queued audio, not the playing buffer.
-        while ((queued * 1000) / SAMPLE_RATE > MAX_QUEUED_MS && queue.length > 2) {
+        while ((queued * 1000) / SAMPLE_RATE > target + HEADROOM_MS && queue.length > 2) {
           const victim = queue[1]
           if (victim === undefined) break
           node.dequeueBuffer(victim.id)
@@ -201,7 +229,7 @@ const openPlayer = Effect.gen(function* () {
 
         // A fuller queue plays slightly faster, an emptier one slightly slower.
         if (++writes % 5 === 0) {
-          const error = ((queued * 1000) / SAMPLE_RATE - CUSHION_MS) / CUSHION_MS
+          const error = ((queued * 1000) / SAMPLE_RATE - target) / target
           node.playbackRate.value = 1 + Math.max(-1, Math.min(1, error)) * MAX_RATE_ADJUST
         }
       },
@@ -212,6 +240,7 @@ const openPlayer = Effect.gen(function* () {
     write,
     stats: Effect.sync(() => ({
       queuedMs: Math.round((queued * 1000) / SAMPLE_RATE),
+      targetMs: jitter.target(Date.now()),
       underruns,
       drops
     }))

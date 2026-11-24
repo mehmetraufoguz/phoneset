@@ -1,6 +1,9 @@
 package expo.modules.phonesetcamera
 
+import android.content.Context
 import android.content.pm.PackageManager
+import android.net.wifi.WifiManager
+import android.os.Build
 import androidx.lifecycle.LifecycleOwner
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -27,8 +30,37 @@ class PhonesetCameraModule : Module() {
   private val nextSocketId = AtomicInteger(1)
   @Volatile private var pipe: PhonesetVideoPipe? = null
 
+  /** Keeps Wi-Fi out of power saving while sound or picture is streaming (see setWifiLock). */
+  private var wifiLock: WifiManager.WifiLock? = null
+
   override fun definition() = ModuleDefinition {
     Name("PhonesetCamera")
+
+    // With the screen off, Wi-Fi power saving hands frames over in groups about every 100 ms, which runs the speaker
+    // queue dry. A held lock keeps the radio awake. Up to Android 13 the high performance mode does that with the screen
+    // off; from 14 on it is the same as low latency, which the system may drop when the screen goes off, so the app also
+    // keeps a cushion of audio (core/jitter.ts) and does not rely on the lock alone.
+    Function("setWifiLock") { on: Boolean ->
+      synchronized(this@PhonesetCameraModule) {
+        if (on) {
+          if (wifiLock?.isHeld != true) {
+            val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            @Suppress("DEPRECATION")
+            val mode =
+              if (Build.VERSION.SDK_INT >= 34) WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+              else WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            wifiLock = wifi.createWifiLock(mode, "phoneset").apply {
+              setReferenceCounted(false)
+              acquire()
+            }
+          }
+        } else {
+          wifiLock?.takeIf { it.isHeld }?.release()
+          wifiLock = null
+        }
+        wifiLock?.isHeld == true
+      }
+    }
 
     Function("isAvailable") {
       context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
@@ -173,6 +205,7 @@ class PhonesetCameraModule : Module() {
     }
 
     OnDestroy {
+      wifiLock?.takeIf { it.isHeld }?.release()
       pipe?.stop("The app is closing.")
       source.stop()
       h264.stop()

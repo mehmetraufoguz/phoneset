@@ -3,6 +3,8 @@ import type { AudioError } from "./errors"
 
 export interface PlayerStats {
   readonly queuedMs: number
+  /** The cushion the player is aiming for. */
+  readonly targetMs: number
   readonly underruns: number
   readonly drops: number
 }
