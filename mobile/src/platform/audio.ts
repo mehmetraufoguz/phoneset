@@ -126,6 +126,10 @@ const mic = Stream.callback<Uint8Array, AudioError>(
 
 /** How far above the cushion the queue may grow (a burst after a stall) before the oldest audio is dropped. */
 const HEADROOM_MS = 160
+/** A wait this long between frames is a pause in the sound, not a late frame. */
+const PAUSE_MS = 400
+/** The PC sends a rush of frames when the stream opens; cutting them is not counted. */
+const START_RUSH_MS = 2000
 /** One frame, in milliseconds. */
 const FRAME_MS = 20
 /** The first 4 ms of sound after a gap rise from silence. */
@@ -174,6 +178,8 @@ const openPlayer = Effect.gen(function* () {
   let underruns = 0
   let drops = 0
   let writes = 0
+  let lastWrite = 0
+  const openedAt = Date.now()
   // The fewest samples queued just before a frame came in, since the playback speed was last set.
   let lowest = Number.POSITIVE_INFINITY
 
@@ -188,22 +194,26 @@ const openPlayer = Effect.gen(function* () {
     queued += l.length
   }
 
-  node.onBufferEnded = ({ bufferId, isLastBufferInQueue }) => {
+  node.onBufferEnded = ({ bufferId }) => {
     const i = queue.findIndex((q) => q.id === bufferId)
     if (i >= 0) {
       queued -= queue[i]?.samples ?? 0
       queue.splice(i, 1)
     }
-    if (isLastBufferInQueue && queue.length === 0) {
-      underruns++
-      jitter.underrun(Date.now())
-    }
+    // An empty queue is counted when the next frame arrives, in `write`: only then is it known whether the sound was
+    // paused (the PC sends nothing during silence) or frames came late.
   }
 
   const write = (pcm: Uint8Array) =>
     Effect.try({
       try: () => {
         const now = Date.now()
+        // The queue ran dry and the next frame is not a new start after a pause: a real gap in the sound.
+        if (queue.length === 0 && lastWrite !== 0 && now - lastWrite <= PAUSE_MS) {
+          underruns++
+          jitter.underrun(now)
+        }
+        lastWrite = now
         jitter.arrive(now)
         const target = jitter.target(now)
         lowest = Math.min(lowest, queued)
@@ -223,7 +233,8 @@ const openPlayer = Effect.gen(function* () {
           node.dequeueBuffer(victim.id)
           queued -= victim.samples
           queue.splice(1, 1)
-          drops++
+          // Frames sent in a rush when the stream opens are silence: cut, but not counted as a fault.
+          if (now - openedAt > START_RUSH_MS) drops++
         }
         if (!started) {
           started = true
