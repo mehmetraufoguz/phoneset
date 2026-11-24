@@ -3,7 +3,7 @@
     "name": "phoneset",
     "slug": "phoneset",
     "scheme": "phoneset",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
