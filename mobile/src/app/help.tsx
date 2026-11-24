@@ -1,59 +1,51 @@
-import { Button, FieldGroup, Host, Text } from "@expo/ui"
 import { useRouter } from "expo-router"
+import { ScrollView, StyleSheet, Text, View } from "react-native"
 import { INSTALL_URL } from "../core/links"
-import { BRAND, useColors } from "../ui/hooks"
+import { usePalette } from "../ui/hooks"
 import { openUrl } from "../ui/open"
+import { Card, PrimaryButton, QuietButton } from "../ui/parts"
 
+/** Four steps, a few words each. The buttons do the step, so nothing has to be explained. */
 export default function Help() {
   const router = useRouter()
-  const colors = useColors()
-  const body = { fontSize: 15, color: colors.secondary }
+  const p = usePalette()
+
+  const step = (n: number, icon: string, title: string, sub?: string) => (
+    <View style={styles.step}>
+      <View style={[styles.num, { backgroundColor: p.raised }]}>
+        <Text style={{ fontSize: 22 }}>{icon}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: p.text, fontSize: 17, fontWeight: "600" }}>{`${n}. ${title}`}</Text>
+        {sub === undefined ? null : <Text style={{ color: p.sub, fontSize: 13 }}>{sub}</Text>}
+      </View>
+    </View>
+  )
 
   return (
-    <Host style={{ flex: 1 }} seedColor={BRAND}>
-      <FieldGroup>
-        <FieldGroup.Section title="1. Put phoneset on your PC">
-          <Text textStyle={body}>
-            This app is the phone half. The PC half is a small free program for Windows 10/11 and
-            macOS, and one command installs it.
-          </Text>
-          <Button
-            variant="outlined"
-            label="Open the install page"
-            onPress={() => openUrl(INSTALL_URL)}
-          />
-        </FieldGroup.Section>
-
-        <FieldGroup.Section title="2. Start it">
-          <Text textStyle={body}>
-            Run phoneset in a terminal, or phoneset daemon to keep it running in the background. It
-            shows a QR code and a 6-digit code.
-          </Text>
-        </FieldGroup.Section>
-
-        <FieldGroup.Section title="3. Pair this phone">
-          <Text textStyle={body}>
-            Put the phone and the PC on the same Wi-Fi. Tap + on the home screen, then scan the QR
-            code or type the 6-digit code.
-          </Text>
-          <Button label="Pair a PC" onPress={() => router.push("/pair")} />
-        </FieldGroup.Section>
-
-        <FieldGroup.Section title="4. Use it">
-          <Text textStyle={body}>
-            Open the PC in the list and switch on Microphone, Headphones or both. Apps on the PC
-            hear your phone's microphone through a virtual audio cable (VB-CABLE on Windows,
-            BlackHole on macOS), and what the PC plays comes out of the phone.
-          </Text>
-        </FieldGroup.Section>
-
-        <FieldGroup.Section title="Good to know">
-          <Text textStyle={body}>
-            Audio goes straight between the phone and the PC, encrypted. It doesn't pass through any
-            server, and the app has no account.
-          </Text>
-        </FieldGroup.Section>
-      </FieldGroup>
-    </Host>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: p.bg }}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{ padding: 16, gap: 12 }}
+    >
+      <Card p={p}>
+        {step(1, "💻", "Install on your PC", "Windows or Mac, free")}
+        <QuietButton p={p} label="Open the install page" onPress={() => openUrl(INSTALL_URL)} />
+      </Card>
+      <Card p={p}>{step(2, "▶️", "Run phoneset", "It shows a QR code")}</Card>
+      <Card p={p}>
+        {step(3, "📱", "Scan the QR code", "Same Wi-Fi as the PC")}
+        <PrimaryButton label="Pair a PC" onPress={() => router.push("/pair")} />
+      </Card>
+      <Card p={p}>{step(4, "🎙️", "Switch on what you need", "Microphone, headphones, camera")}</Card>
+      <Text style={{ color: p.sub, fontSize: 12.5, textAlign: "center" }}>
+        No account. Sound and picture go straight to your PC.
+      </Text>
+    </ScrollView>
   )
 }
+
+const styles = StyleSheet.create({
+  step: { flexDirection: "row", alignItems: "center", gap: 12 },
+  num: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" }
+})

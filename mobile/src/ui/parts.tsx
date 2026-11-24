@@ -62,10 +62,13 @@ export function Segments({
 export function NavRow({
   p,
   label,
+  value,
   onPress
 }: {
   readonly p: Palette
   readonly label: string
+  /** What is set now, shown at the right ("Not subscribed"). */
+  readonly value?: string
   readonly onPress: () => void
 }) {
   return (
@@ -75,12 +78,73 @@ export function NavRow({
       accessibilityRole="button"
     >
       <Text style={{ color: p.text, fontSize: 16 }}>{label}</Text>
-      <Text style={{ color: p.sub, fontSize: 18 }}>›</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
+        {value === undefined ? null : (
+          <Text style={{ color: p.sub, fontSize: 14, flexShrink: 1 }} numberOfLines={1}>
+            {value}
+          </Text>
+        )}
+        <Text style={{ color: p.sub, fontSize: 18 }}>›</Text>
+      </View>
+    </Pressable>
+  )
+}
+
+/** The one main action of a screen. */
+export function PrimaryButton({
+  label,
+  disabled,
+  onPress
+}: {
+  readonly label: string
+  readonly disabled?: boolean
+  readonly onPress: () => void
+}) {
+  return (
+    <Pressable
+      style={[styles.primary, disabled && { opacity: 0.5 }]}
+      disabled={disabled}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <Text style={styles.primaryText}>{label}</Text>
+    </Pressable>
+  )
+}
+
+/** A calm button for the other actions. */
+export function QuietButton({
+  p,
+  label,
+  disabled,
+  onPress
+}: {
+  readonly p: Palette
+  readonly label: string
+  readonly disabled?: boolean
+  readonly onPress: () => void
+}) {
+  return (
+    <Pressable
+      style={[styles.quiet, { backgroundColor: p.raised }, disabled && { opacity: 0.5 }]}
+      disabled={disabled}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <Text style={{ color: p.text, fontSize: 16, fontWeight: "600" }}>{label}</Text>
     </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
+  primary: {
+    backgroundColor: "#3B6BFF",
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center"
+  },
+  primaryText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
+  quiet: { borderRadius: 14, paddingVertical: 14, alignItems: "center" },
   label: { fontSize: 11.5, letterSpacing: 0.7, marginTop: 2 },
   card: { borderRadius: 20, borderWidth: 1, padding: 14, gap: 10 },
   segments: { flexDirection: "row", borderRadius: 12, padding: 3, gap: 2 },

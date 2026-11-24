@@ -1,24 +1,24 @@
-import { Button, FieldGroup, Host, Text, TextInput } from "@expo/ui"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { Fragment, useEffect, useRef, useState } from "react"
-import { Alert } from "react-native"
+import { useEffect, useRef, useState } from "react"
+import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native"
 import { DEFAULT_PORT } from "../core/constants"
 import type { DiscoveredPc } from "../core/discovery"
 import { parsePairLink } from "../core/link"
 import { Session, type Target } from "../core/session"
 import { runtime } from "../runtime"
-import { act, BRAND, useColors, useDiscovered } from "../ui/hooks"
-import { tappableRow } from "../ui/tappableRow"
+import { act, useDiscovered, usePalette } from "../ui/hooks"
+import { Card, NavRow, PrimaryButton, QuietButton } from "../ui/parts"
 
 const digits = (s: string) => s.replace(/\D/g, "")
 const enc = (s: string | undefined) => encodeURIComponent(s ?? "")
 
 export default function Pair() {
   const router = useRouter()
-  const colors = useColors()
+  const p = usePalette()
   const nearby = useDiscovered()
   const [code, setCode] = useState("")
   const [address, setAddress] = useState("")
+  const [showAddress, setShowAddress] = useState(false)
 
   const begin = (target: Target) => {
     act(Session.use((s) => s.start(target)))
@@ -60,12 +60,12 @@ export default function Pair() {
     })
 
   // Opened by the system camera app scanning the PC's QR code (phoneset://pair?...).
-  const { id, n, h, p, k } = useLocalSearchParams<Record<string, string | undefined>>()
+  const { id, n, h, p: port, k } = useLocalSearchParams<Record<string, string | undefined>>()
   const handled = useRef<string | null>(null)
   useEffect(() => {
     if (!k || handled.current === k) return
     handled.current = k
-    const link = `phoneset://pair?v=2&id=${enc(id)}&n=${enc(n)}&h=${enc(h)}&p=${enc(p)}&k=${enc(k)}`
+    const link = `phoneset://pair?v=2&id=${enc(id)}&n=${enc(n)}&h=${enc(h)}&p=${enc(port)}&k=${enc(k)}`
     runtime
       .runPromise(parsePairLink(link))
       .then((parsed) =>
@@ -84,49 +84,68 @@ export default function Pair() {
       .catch(() =>
         Alert.alert("Not a phoneset code", "Scan the QR code shown by phoneset on your PC.")
       )
-  }, [id, n, h, p, k, router])
+  }, [id, n, h, port, k, router])
 
   return (
-    <Host style={{ flex: 1 }} seedColor={BRAND}>
-      <FieldGroup>
-        <FieldGroup.Section title="With the QR code">
-          <Button label="Scan QR code" onPress={() => router.push("/scan")} />
-        </FieldGroup.Section>
-
-        <FieldGroup.Section title="Or with the 6-digit code">
+    <ScrollView
+      style={{ flex: 1, backgroundColor: p.bg }}
+      contentInsetAdjustmentBehavior="automatic"
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ padding: 16, gap: 14 }}
+    >
+      <PrimaryButton label="Scan QR code" onPress={() => router.push("/scan")} />
+      <Text style={{ color: p.sub, textAlign: "center", fontSize: 13 }}>or type the code</Text>
+      <TextInput
+        value={code}
+        onChangeText={setCode}
+        placeholder="000 000"
+        placeholderTextColor={p.sub}
+        keyboardType="number-pad"
+        inputMode="numeric"
+        maxLength={7}
+        autoCorrect={false}
+        style={{
+          backgroundColor: p.surface,
+          borderColor: p.line,
+          borderWidth: 1,
+          borderRadius: 16,
+          color: p.text,
+          fontSize: 28,
+          fontVariant: ["tabular-nums"],
+          letterSpacing: 4,
+          paddingVertical: 14,
+          textAlign: "center"
+        }}
+      />
+      {nearby.length === 0 ? (
+        <Text style={{ color: p.sub, textAlign: "center", fontSize: 13 }}>
+          Looking for PCs on this Wi-Fi…
+        </Text>
+      ) : (
+        nearby.map((pc) => (
+          <NavRow key={pc.id} p={p} label={`Pair with ${pc.name}`} onPress={() => pairWith(pc)} />
+        ))
+      )}
+      <Pressable onPress={() => setShowAddress((v) => !v)} accessibilityRole="button">
+        <Text style={{ color: "#3B6BFF", textAlign: "center", fontSize: 14, padding: 6 }}>
+          PC not listed?
+        </Text>
+      </Pressable>
+      {showAddress ? (
+        <Card p={p}>
           <TextInput
-            placeholder="123 456"
-            keyboardType="number-pad"
-            inputMode="numeric"
-            maxLength={7}
-            autoCorrect={false}
-            onChangeText={setCode}
-          />
-          {nearby.length === 0 ? (
-            <Text textStyle={{ color: colors.secondary }}>Looking for PCs on this Wi-Fi…</Text>
-          ) : (
-            nearby.map((pc) => (
-              <Fragment key={pc.id}>
-                {tappableRow(
-                  <Text textStyle={{ color: BRAND }}>{`Pair with ${pc.name}`}</Text>,
-                  () => pairWith(pc)
-                )}
-              </Fragment>
-            ))
-          )}
-        </FieldGroup.Section>
-
-        <FieldGroup.Section title="Can't see your PC?">
-          <TextInput
+            value={address}
+            onChangeText={setAddress}
             placeholder="PC address, e.g. 192.168.1.20"
+            placeholderTextColor={p.sub}
             keyboardType="numbers-and-punctuation"
             autoCapitalize="none"
             autoCorrect={false}
-            onChangeText={setAddress}
+            style={{ color: p.text, fontSize: 16, paddingVertical: 6 }}
           />
-          <Button variant="outlined" label="Pair with this address" onPress={pairWithAddress} />
-        </FieldGroup.Section>
-      </FieldGroup>
-    </Host>
+          <QuietButton p={p} label="Pair with this address" onPress={pairWithAddress} />
+        </Card>
+      ) : null}
+    </ScrollView>
   )
 }

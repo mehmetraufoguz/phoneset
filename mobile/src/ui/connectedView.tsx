@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native"
 import { Session, type SessionState, type StreamStatus, type VideoStatus } from "../core/session"
 import { modesOfFormat, tiersOffered } from "../core/videoModes"
-import { detailOf } from "./cameraSection"
+import { detailOf } from "./cameraStatus"
 import { act, usePalette } from "./hooks"
 import { Label, NavRow, Segments } from "./parts"
 
